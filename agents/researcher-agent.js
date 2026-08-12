@@ -2,7 +2,7 @@
 // ES-module: exports TurasResearcher class
 // Uses Cloudflare Worker proxy for live API calls with simulated fallback
 
-const WORKER_URL = 'https://turas-ai-proxy.femihall.workers.dev';
+const WORKER_URL = 'https://turas-ai-proxy.symphony-driver-assist.workers.dev';
 
 const HUB_DEFINITIONS = {
   dublin: [
