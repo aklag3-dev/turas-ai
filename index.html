@@ -4,87 +4,198 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Turas AI — Predictive Dispatch Dashboard</title>
-  <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="img/favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    
     :root {
       --green: #22c55e;
       --amber: #f59e0b;
       --red: #ef4444;
-      --bg-dark: #0f172a;
-      --bg-card: #1e293b;
-      --text-primary: #f1f5f9;
-      --text-secondary: #94a3b8;
-      --border: #334155;
+      --bg-primary: #ffffff;
+      --bg-secondary: #f8fafc;
+      --bg-tertiary: #f1f5f9;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --shadow: rgba(0, 0, 0, 0.1);
     }
+    
+    [data-theme="dark"] {
+      --bg-primary: #000000;
+      --bg-secondary: #0a0a0a;
+      --bg-tertiary: #1a1a1a;
+      --text-primary: #f8fafc;
+      --text-secondary: #cbd5e1;
+      --text-muted: #64748b;
+      --border: #2a2a2a;
+      --shadow: rgba(0, 0, 0, 0.5);
+    }
+    
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--bg-dark);
+      background: var(--bg-primary);
       color: var(--text-primary);
       height: 100vh;
       overflow: hidden;
+      transition: background 0.3s, color 0.3s;
     }
+    
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1rem;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      z-index: 1001;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .app-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--green);
+    }
+    
+    .status-led {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse-led 2s infinite;
+    }
+    
+    .status-led.error {
+      background: var(--red);
+      box-shadow: 0 0 8px var(--red);
+    }
+    
+    @keyframes pulse-led {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    
+    .header-center {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    
+    .city-select, .platform-select {
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 0.375rem;
+      color: var(--text-primary);
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    
+    .save-btn {
+      padding: 0.5rem 1rem;
+      background: var(--green);
+      color: white;
+      border: none;
+      border-radius: 0.375rem;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.875rem;
+      transition: all 0.2s;
+    }
+    
+    .save-btn:disabled {
+      background: var(--text-muted);
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+    
+    .save-btn:not(:disabled):hover {
+      background: #16a34a;
+    }
+    
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .location-btn {
+      padding: 0.5rem 1rem;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 0.375rem;
+      color: var(--text-primary);
+      cursor: pointer;
+      font-size: 0.875rem;
+      transition: all 0.2s;
+    }
+    
+    .location-btn:hover {
+      border-color: var(--green);
+    }
+    
+    .location-btn.active {
+      background: var(--green);
+      color: white;
+      border-color: var(--green);
+    }
+    
+    .theme-toggle {
+      padding: 0.5rem;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 0.375rem;
+      color: var(--text-primary);
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    
     .container {
       display: grid;
-      grid-template-columns: 280px 1fr 320px;
-      height: 100vh;
+      grid-template-columns: 320px 1fr;
+      height: calc(100vh - 60px);
     }
+    
     .left-rail {
-      background: var(--bg-card);
+      background: var(--bg-secondary);
       border-right: 1px solid var(--border);
       overflow-y: auto;
       padding: 1rem;
     }
+    
     .map-container {
       position: relative;
     }
+    
     #map {
       width: 100%;
       height: 100%;
     }
-    .right-rail {
-      background: var(--bg-card);
-      border-left: 1px solid var(--border);
-      overflow-y: auto;
-      padding: 1rem;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-    .header {
-      padding: 1rem;
-      background: var(--bg-card);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .header h1 {
-      font-size: 1.25rem;
+    
+    .section-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
       font-weight: 600;
+      letter-spacing: 0.5px;
     }
-    .mode-toggle {
-      display: flex;
-      gap: 0.5rem;
-    }
-    .mode-btn {
-      padding: 0.5rem 1rem;
-      border: 1px solid var(--border);
-      background: transparent;
-      color: var(--text-secondary);
-      border-radius: 0.375rem;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .mode-btn.active {
-      background: var(--green);
-      color: var(--bg-dark);
-      border-color: var(--green);
-    }
+    
     .hub-card {
-      background: var(--bg-dark);
+      background: var(--bg-tertiary);
       border: 1px solid var(--border);
       border-radius: 0.5rem;
       padding: 0.75rem;
@@ -92,50 +203,73 @@
       cursor: pointer;
       transition: all 0.2s;
     }
+    
     .hub-card:hover {
       border-color: var(--green);
+      transform: translateX(2px);
     }
+    
     .hub-card.selected {
       border-color: var(--green);
-      background: rgba(34, 197, 94, 0.05);
+      background: rgba(34, 197, 94, 0.1);
+      box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
     }
+    
     .hub-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 0.5rem;
     }
+    
     .hub-name {
       font-weight: 600;
       font-size: 0.875rem;
+      color: var(--text-primary);
     }
+    
+    .hub-type {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
     .pfare-badge {
       padding: 0.25rem 0.5rem;
       border-radius: 0.25rem;
       font-weight: 700;
       font-size: 0.875rem;
     }
-    .pfare-green { background: var(--green); color: var(--bg-dark); }
-    .pfare-amber { background: var(--amber); color: var(--bg-dark); }
-    .pfare-red { background: var(--red); color: var(--bg-dark); }
+    
+    .pfare-green { background: var(--green); color: white; }
+    .pfare-amber { background: var(--amber); color: white; }
+    .pfare-red { background: var(--red); color: white; }
+    
     .hub-stats {
       display: flex;
-      gap: 0.75rem;
+      gap: 1rem;
       font-size: 0.75rem;
       color: var(--text-secondary);
+      margin-top: 0.5rem;
     }
+    
     .stat {
       display: flex;
       flex-direction: column;
     }
+    
     .stat-label {
       font-size: 0.625rem;
       text-transform: uppercase;
+      color: var(--text-muted);
     }
+    
     .stat-value {
       font-weight: 600;
       color: var(--text-primary);
     }
+    
     .score-bar {
       width: 100%;
       height: 4px;
@@ -144,156 +278,55 @@
       margin-top: 0.5rem;
       overflow: hidden;
     }
+    
     .score-bar-fill {
       height: 100%;
       border-radius: 2px;
       transition: width 0.3s ease;
     }
-    .section-title {
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      color: var(--text-secondary);
-      margin-bottom: 0.5rem;
-      font-weight: 600;
-    }
-    .weather-strip {
+    
+    .weather-mini {
       display: flex;
+      align-items: center;
       gap: 0.5rem;
-      overflow-x: auto;
-      padding-bottom: 0.5rem;
-    }
-    .weather-hour {
-      flex: 0 0 auto;
-      background: var(--bg-dark);
-      border: 1px solid var(--border);
-      border-radius: 0.375rem;
-      padding: 0.5rem;
-      text-align: center;
-      min-width: 60px;
-    }
-    .weather-time {
-      font-size: 0.625rem;
+      margin-top: 0.5rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.75rem;
       color: var(--text-secondary);
     }
-    .weather-temp {
-      font-weight: 600;
-      font-size: 0.875rem;
+    
+    .weather-icon {
+      font-size: 1rem;
     }
-    .weather-rain {
-      font-size: 0.75rem;
-      color: #60a5fa;
-    }
-    .chatbot-panel {
-      background: var(--bg-dark);
-      border: 1px solid var(--border);
-      border-radius: 0.5rem;
-      padding: 0.75rem;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
-    .chat-messages {
-      flex: 1;
-      overflow-y: auto;
-      margin-bottom: 0.5rem;
-      max-height: 200px;
-    }
-    .chat-message {
-      margin-bottom: 0.5rem;
-      padding: 0.5rem;
-      border-radius: 0.375rem;
-    }
-    .chat-message.bot {
-      background: var(--bg-card);
-    }
-    .chat-message.user {
-      background: rgba(34, 197, 94, 0.1);
-      margin-left: 1rem;
-    }
-    .chat-input {
-      display: flex;
-      gap: 0.5rem;
-    }
-    .chat-input input {
-      flex: 1;
-      padding: 0.5rem;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 0.375rem;
-      color: var(--text-primary);
-    }
-    .chat-input button {
-      padding: 0.5rem 1rem;
-      background: var(--green);
-      color: var(--bg-dark);
-      border: none;
-      border-radius: 0.375rem;
-      cursor: pointer;
-      font-weight: 600;
-    }
-    .feedback-panel {
-      background: var(--bg-dark);
-      border: 1px solid var(--border);
-      border-radius: 0.5rem;
-      padding: 0.75rem;
-    }
-    .feedback-buttons {
-      display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-    .feedback-btn {
-      flex: 1;
-      padding: 0.5rem;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 0.375rem;
-      color: var(--text-primary);
-      cursor: pointer;
-      font-size: 0.75rem;
-      transition: all 0.2s;
-    }
-    .feedback-btn:hover {
-      border-color: var(--green);
-    }
-    .feedback-btn.submitted {
-      background: var(--green);
-      color: var(--bg-dark);
-      border-color: var(--green);
-    }
+    
     .transparency-notice {
       position: absolute;
       bottom: 1rem;
       left: 1rem;
       right: 1rem;
-      background: rgba(30, 41, 59, 0.95);
+      background: var(--bg-secondary);
       border: 1px solid var(--border);
       border-radius: 0.5rem;
       padding: 0.75rem;
       font-size: 0.75rem;
       color: var(--text-secondary);
       z-index: 1000;
+      box-shadow: 0 2px 8px var(--shadow);
     }
+    
     .transparency-notice strong {
       color: var(--text-primary);
     }
-    .drive-mode .left-rail,
-    .drive-mode .right-rail {
-      display: none;
-    }
-    .drive-mode .map-container {
-      grid-column: 1 / -1;
-    }
-    .drive-mode .transparency-notice {
-      bottom: 2rem;
-    }
+    
     .loading {
       display: flex;
       align-items: center;
       justify-content: center;
       height: 100%;
-      color: var(--text-secondary);
+      color: var(--text-muted);
     }
+    
     .spinner {
       width: 2rem;
       height: 2rem;
@@ -302,81 +335,17 @@
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
+    
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
-    .app-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0.75rem 1rem;
-      background: var(--bg-card);
-      border-bottom: 1px solid var(--border);
-      z-index: 1001;
-    }
-    .header-left {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-    .logo {
-      height: 36px;
-      width: auto;
-    }
-    .app-title {
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: var(--green);
-    }
-    .header-center {
-      display: flex;
-      gap: 0.75rem;
-    }
-    .city-select, .platform-select {
-      padding: 0.5rem 0.75rem;
-      background: var(--bg-dark);
-      border: 1px solid var(--border);
-      border-radius: 0.375rem;
-      color: var(--text-primary);
-      font-size: 0.875rem;
-      cursor: pointer;
-    }
-    .header-right {
-      display: flex;
-      align-items: center;
-    }
-    #mode-toggle {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.5rem 1rem;
-      background: var(--bg-dark);
-      border: 1px solid var(--border);
-      border-radius: 0.375rem;
-      color: var(--text-primary);
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    #mode-toggle:hover {
-      border-color: var(--green);
-    }
-    #mode-toggle.active {
-      background: var(--green);
-      color: var(--bg-dark);
-      border-color: var(--green);
-    }
-    .mode-icon {
-      font-size: 1rem;
-    }
-    .mode-label {
-      font-size: 0.875rem;
-      font-weight: 500;
-    }
+    
     @keyframes pulse {
       0% { transform: scale(1); opacity: 1; }
       50% { transform: scale(1.5); opacity: 0.5; }
       100% { transform: scale(1); opacity: 1; }
     }
+    
     .driver-marker {
       width: 20px;
       height: 20px;
@@ -386,74 +355,69 @@
       box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
       animation: pulse 2s infinite;
     }
-    .location-btn {
-      padding: 0.5rem 1rem;
-      background: var(--bg-dark);
-      border: 1px solid var(--border);
-      border-radius: 0.375rem;
-      color: var(--text-primary);
-      cursor: pointer;
-      font-size: 0.875rem;
-      transition: all 0.2s;
+    
+    .hub-marker-highlight {
+      animation: highlight-pulse 1s ease-in-out;
     }
-    .location-btn:hover {
-      border-color: var(--green);
+    
+    @keyframes highlight-pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.3); }
     }
-    .location-btn.active {
-      background: var(--green);
-      color: var(--bg-dark);
-      border-color: var(--green);
-    }
-    .location-controls {
-      display: flex;
-      gap: 0.5rem;
-      margin-top: 0.5rem;
-    }
-    .yield-panel {
-      background: var(--bg-dark);
-      border: 1px solid var(--border);
-      border-radius: 0.5rem;
-      padding: 0.75rem;
-    }
-    .yield-value {
-      font-size: 1.5rem;
-      font-weight: 700;
-      color: var(--green);
-    }
-    .yield-label {
-      font-size: 0.75rem;
-      color: var(--text-secondary);
+    
+    @media (max-width: 768px) {
+      .container {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+      }
+      
+      .left-rail {
+        max-height: 40vh;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+      
+      .app-header {
+        padding: 0.5rem;
+      }
+      
+      .header-center {
+        order: 3;
+        width: 100%;
+        justify-content: space-between;
+      }
+      
+      .city-select, .platform-select {
+        flex: 1;
+        font-size: 0.75rem;
+        padding: 0.4rem;
+      }
     }
   </style>
 </head>
 <body>
   <header class="app-header">
     <div class="header-left">
-      <img src="img/logo.svg" alt="Turas AI" class="logo" onerror="this.style.display='none'">
+      <div class="status-led" id="status-led"></div>
       <h1 class="app-title">Turas AI</h1>
     </div>
     <div class="header-center">
-      <select id="city-select" class="city-select" onchange="changeCity(this.value)">
+      <select id="city-select" class="city-select" onchange="onCityPlatformChange()">
         <option value="dublin">Dublin</option>
         <option value="cork">Cork</option>
         <option value="shannon">Shannon / Limerick</option>
       </select>
-      <select id="platform-select" class="platform-select" onchange="changePlatform(this.value)">
+      <select id="platform-select" class="platform-select" onchange="onCityPlatformChange()">
         <option value="freenow">FreeNow (Taxi)</option>
         <option value="independent">Independent Taxi</option>
         <option value="uber">Uber</option>
         <option value="bolt">Bolt</option>
       </select>
+      <button class="save-btn" id="save-btn" onclick="saveConfig()">Save</button>
     </div>
     <div class="header-right">
-      <div class="location-controls">
-        <button class="location-btn" id="gps-btn" onclick="requestGPS()">📍 GPS</button>
-        <button class="location-btn" id="demo-btn" onclick="demoMode()">🎲 Demo</button>
-      </div>
-      <button class="mode-btn" id="mode-toggle" onclick="toggleMode()">
-        <span class="mode-icon">🚗</span>
-        <span class="mode-label">Drive Mode</span>
-      </button>
+      <button class="location-btn" id="gps-btn" onclick="requestGPS()">📍 Allow GPS</button>
+      <button class="theme-toggle" onclick="toggleTheme()">🌓</button>
     </div>
   </header>
 
@@ -473,42 +437,6 @@
         <strong>AI Recommendation System (EU AI Act Article 50):</strong> Scores are generated by automated AI based on real-time transit data, weather, and demand patterns. Parameters are highlighted for explainability. No personal data is collected or stored.
       </div>
     </div>
-
-    <div class="right-rail">
-      <div>
-        <div class="section-title">Weather Forecast</div>
-        <div class="weather-strip" id="weather-strip">
-          <div class="loading"><div class="spinner"></div></div>
-        </div>
-      </div>
-
-      <div class="chatbot-panel">
-        <div class="section-title">AI Assistant</div>
-        <div class="chat-messages" id="chat-messages">
-          <div class="chat-message bot">
-            Hello! I'm your Turas AI assistant. Ask me about scores, rank rules, or transit policies.
-          </div>
-        </div>
-        <div class="chat-input">
-          <input type="text" id="chat-input" placeholder="Ask a question..." />
-          <button onclick="handleChat()">Send</button>
-        </div>
-      </div>
-
-      <div class="yield-panel">
-        <div class="yield-label">Estimated Yield Gain</div>
-        <div class="yield-value" id="yield-value">—</div>
-      </div>
-
-      <div class="feedback-panel">
-        <div class="section-title">Outcome Feedback</div>
-        <div class="feedback-buttons">
-          <button class="feedback-btn" onclick="submitFeedback('fast')">Secured Fare &lt;5 mins</button>
-          <button class="feedback-btn" onclick="submitFeedback('medium')">Secured Fare 5-15 mins</button>
-          <button class="feedback-btn" onclick="submitFeedback('none')">No Fare / Left Rank</button>
-        </div>
-      </div>
-    </div>
   </div>
 
   <script type="module">
@@ -519,18 +447,19 @@
 
     const state = {
       sessionId: crypto.randomUUID(),
-      city: 'dublin',
-      platform: 'freenow',
-      mode: 'stationary',
+      city: localStorage.getItem('turas_city') || 'dublin',
+      platform: localStorage.getItem('turas_platform') || 'freenow',
       selectedHub: null,
       matrix: null,
       brief: null,
       map: null,
-      markers: [],
+      markers: {},
       routeLine: null,
       driverMarker: null,
       driverCoords: null,
-      locationMode: 'city-center'
+      locationMode: 'demo',
+      systemStatus: 'live',
+      configSaved: true
     };
 
     const cityCoords = {
@@ -545,7 +474,15 @@
       shannon: { latMin: 52.5, latMax: 52.8, lngMin: -9.1, lngMax: -8.7 }
     };
 
-    // ─── Maker Agent (Payload Engineer) ───
+    // Initialize theme
+    const savedTheme = localStorage.getItem('turas_theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+
+    // Initialize selects
+    document.getElementById('city-select').value = state.city;
+    document.getElementById('platform-select').value = state.platform;
+
+    // ─── Maker Agent ───
     function buildPayload(matrix, brief, driverCoords) {
       const geojson = {
         type: 'FeatureCollection',
@@ -570,7 +507,6 @@
         timestamp: new Date().toISOString(),
         city: state.city,
         platform: state.platform,
-        mode: state.mode,
         driverCoords: driverCoords ? { lat: driverCoords.lat, lng: driverCoords.lng } : null,
         selectedHub: state.selectedHub,
         topHubId: matrix.summary.topHubId,
@@ -593,7 +529,7 @@
       return { geojson, logObject, botContext };
     }
 
-    // ─── Manager Agent (Governance Lead) ───
+    // ─── Manager Agent ───
     function audit(matrix, brief, session) {
       const zeroPIICheck = {
         passed: true,
@@ -619,7 +555,6 @@
       const executionLog = {
         sessionId: session.sessionId,
         timestamp: new Date().toISOString(),
-        pipelineDuration: null,
         zeroPIICheck: zeroPIICheck.passed,
         yieldEstimate,
         auditComplete: true
@@ -716,43 +651,54 @@
     }
 
     // ─── Geolocation ───
-    window.requestGPS = function() {
+    window.requestGPS = async function() {
       if (!navigator.geolocation) {
         alert('Geolocation not supported by your browser');
         return;
       }
 
       document.getElementById('gps-btn').classList.add('active');
-      document.getElementById('demo-btn').classList.remove('active');
+      state.locationMode = 'gps';
 
       navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
           updateDriverMarker(position.coords.latitude, position.coords.longitude);
-          state.locationMode = 'gps';
           state.map.setView([position.coords.latitude, position.coords.longitude], 13);
-          runPipeline();
+          await runPipeline();
         },
         (error) => {
           alert('Unable to get location: ' + error.message);
           document.getElementById('gps-btn').classList.remove('active');
+          state.locationMode = 'demo';
+          placeDemoDriver();
         }
       );
     };
 
-    window.demoMode = function() {
+    // ─── Demo Mode (Road-based) ───
+    async function placeDemoDriver() {
       const bounds = cityBounds[state.city];
       const lat = bounds.latMin + Math.random() * (bounds.latMax - bounds.latMin);
       const lng = bounds.lngMin + Math.random() * (bounds.lngMax - bounds.lngMin);
 
+      try {
+        const resp = await fetch(`https://router.project-osrm.org/nearest/v1/driving/${lng},${lat}?number=1`);
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.waypoints && data.waypoints.length > 0) {
+            const waypoint = data.waypoints[0].location;
+            updateDriverMarker(waypoint[1], waypoint[0]);
+            state.map.setView([waypoint[1], waypoint[0]], 13);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('OSRM failed, using random coords:', e);
+      }
+
       updateDriverMarker(lat, lng);
-      state.locationMode = 'demo';
       state.map.setView([lat, lng], 13);
-
-      document.getElementById('demo-btn').classList.add('active');
-      document.getElementById('gps-btn').classList.remove('active');
-
-      runPipeline();
-    };
+    }
 
     // ─── Hub List Rendering ───
     function renderHubList(matrix) {
@@ -761,10 +707,23 @@
         const colorClass = hub.pFare >= 80 ? 'pfare-green' : hub.pFare >= 50 ? 'pfare-amber' : 'pfare-red';
         const selected = state.selectedHub === hub.hubId ? 'selected' : '';
         const barColor = hub.pFare >= 80 ? 'var(--green)' : hub.pFare >= 50 ? 'var(--amber)' : 'var(--red)';
+        
+        const hubType = hub.hubId.includes('airport') || hub.hubId.includes('ork') || hub.hubId.includes('snn') || hub.hubId.includes('dub-t') 
+          ? 'Airport' 
+          : hub.hubId.includes('port') || hub.hubId.includes('ringaskiddy') || hub.hubId.includes('foynes')
+          ? 'Ferry Port'
+          : 'Rail Station';
+        
+        const weather = hub.weather;
+        const weatherIcon = weather.precipMmHr > 5 ? '🌧️' : weather.precipMmHr > 2 ? '🌦️' : weather.tempC <= 3 ? '❄️' : '☀️';
+        
         return `
-          <div class="hub-card ${selected}" onclick="selectHub('${hub.hubId}')">
+          <div class="hub-card ${selected}" onclick="selectHub('${hub.hubId}')" data-hub-id="${hub.hubId}">
             <div class="hub-header">
-              <div class="hub-name">${hub.name}</div>
+              <div>
+                <div class="hub-name">${hub.name}</div>
+                <div class="hub-type">${hubType}</div>
+              </div>
               <div class="pfare-badge ${colorClass}">${hub.pFare}%</div>
             </div>
             <div class="hub-stats">
@@ -784,6 +743,10 @@
             <div class="score-bar">
               <div class="score-bar-fill" style="width: ${hub.pFare}%; background: ${barColor};"></div>
             </div>
+            <div class="weather-mini">
+              <span class="weather-icon">${weatherIcon}</span>
+              <span>${weather.tempC}°C · ${weather.precipMmHr}mm/hr</span>
+            </div>
           </div>
         `;
       }).join('');
@@ -791,14 +754,14 @@
 
     // ─── Map Markers ───
     function renderMapMarkers(matrix) {
-      state.markers.forEach(m => state.map.removeLayer(m));
-      state.markers = [];
+      Object.values(state.markers).forEach(m => state.map.removeLayer(m));
+      state.markers = {};
 
       matrix.hubs.forEach(hub => {
         const marker = L.marker([hub.lat, hub.lng], {
           icon: L.divIcon({
             className: 'custom-marker',
-            html: `<div style="background: ${hub.pinColor}; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></div>`,
+            html: `<div style="background: ${hub.pinColor}; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: transform 0.3s;"></div>`,
             iconSize: [24, 24]
           })
         }).addTo(state.map);
@@ -811,78 +774,8 @@
           ${hub.rationale}
         `);
 
-        state.markers.push(marker);
+        state.markers[hub.hubId] = marker;
       });
-    }
-
-    // ─── Weather Strip (Live Data) ───
-    async function renderWeatherStrip(brief) {
-      const container = document.getElementById('weather-strip');
-      const coords = cityCoords[state.city];
-
-      try {
-        const resp = await fetch(`${WORKER_URL}/api/weather?lat=${coords.lat}&lon=${coords.lng}`);
-        if (!resp.ok) throw new Error('Weather API failed');
-        const data = await resp.json();
-
-        if (data.data && data.data.time) {
-          const now = new Date();
-          const currentHour = now.getHours();
-          const hours = [];
-
-          for (let i = 0; i < 6; i++) {
-            const hourIdx = data.data.time.findIndex(t => new Date(t).getHours() >= (currentHour + i) % 24);
-            if (hourIdx >= 0) {
-              hours.push({
-                time: new Date(data.data.time[hourIdx]).getHours() + ':00',
-                temp: Math.round(data.data.temperature_2m[hourIdx]),
-                rain: Math.round(data.data.precipitation[hourIdx] * 10) / 10
-              });
-            }
-          }
-
-          if (hours.length > 0) {
-            container.innerHTML = hours.map(h => `
-              <div class="weather-hour">
-                <div class="weather-time">${h.time}</div>
-                <div class="weather-temp">${h.temp}°C</div>
-                <div class="weather-rain">${h.rain}mm</div>
-              </div>
-            `).join('');
-            return;
-          }
-        }
-      } catch (e) {
-        console.warn('Weather fetch failed, using fallback:', e);
-      }
-
-      // Fallback to brief data
-      const weather = brief.hubs[0]?.weather;
-      if (!weather) {
-        container.innerHTML = '<div>No weather data</div>';
-        return;
-      }
-
-      const hours = [];
-      const now = new Date();
-      for (let i = 0; i < 6; i++) {
-        const hour = new Date(now.getTime() + i * 3600000);
-        const precip = Math.max(0, weather.precipMmHr + (Math.random() - 0.5) * 2);
-        const temp = weather.tempC + (Math.random() - 0.5) * 3;
-        hours.push({
-          time: hour.getHours() + ':00',
-          temp: Math.round(temp),
-          rain: Math.round(precip * 10) / 10
-        });
-      }
-
-      container.innerHTML = hours.map(h => `
-        <div class="weather-hour">
-          <div class="weather-time">${h.time}</div>
-          <div class="weather-temp">${h.temp}°C</div>
-          <div class="weather-rain">${h.rain}mm</div>
-        </div>
-      `).join('');
     }
 
     // ─── Hub Selection ───
@@ -894,120 +787,80 @@
       if (hub) {
         state.map.setView([hub.lat, hub.lng], 13);
         drawRouteToHub(hub);
-        speakUpdate(hub);
+        
+        const marker = state.markers[hubId];
+        if (marker) {
+          const el = marker.getElement();
+          if (el) {
+            el.querySelector('div').classList.add('hub-marker-highlight');
+            setTimeout(() => {
+              el.querySelector('div').classList.remove('hub-marker-highlight');
+            }, 1000);
+          }
+        }
       }
     };
 
-    // ─── TTS ───
-    function speakUpdate(hub) {
-      if (state.mode !== 'drive') return;
-      const msg = `Turas AI update: ${hub.name} score is ${hub.pFare} percent. ${hub.rationale}`;
-      if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(msg);
-        utterance.rate = 0.9;
-        speechSynthesis.speak(utterance);
+    // ─── Config Save ───
+    window.onCityPlatformChange = function() {
+      state.configSaved = false;
+      document.getElementById('save-btn').disabled = false;
+    };
+
+    window.saveConfig = async function() {
+      state.city = document.getElementById('city-select').value;
+      state.platform = document.getElementById('platform-select').value;
+      
+      localStorage.setItem('turas_city', state.city);
+      localStorage.setItem('turas_platform', state.platform);
+      
+      state.configSaved = true;
+      document.getElementById('save-btn').disabled = true;
+      
+      state.map.setView(cityCoords[state.city], 11);
+      await runPipeline();
+    };
+
+    // ─── Theme Toggle ───
+    window.toggleTheme = function() {
+      const current = document.documentElement.getAttribute('data-theme');
+      const newTheme = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', newTheme);
+      localStorage.setItem('turas_theme', newTheme);
+    };
+
+    // ─── Status LED ───
+    function updateStatusLED(status) {
+      state.systemStatus = status;
+      const led = document.getElementById('status-led');
+      if (status === 'error') {
+        led.classList.add('error');
+      } else {
+        led.classList.remove('error');
       }
     }
-
-    // ─── Chatbot ───
-    window.handleChat = function() {
-      const input = document.getElementById('chat-input');
-      const question = input.value.trim();
-      if (!question) return;
-
-      const messages = document.getElementById('chat-messages');
-      messages.innerHTML += `<div class="chat-message user">${question}</div>`;
-      input.value = '';
-
-      const response = generateChatResponse(question);
-      setTimeout(() => {
-        messages.innerHTML += `<div class="chat-message bot">${response}</div>`;
-        messages.scrollTop = messages.scrollHeight;
-      }, 500);
-    };
-
-    function generateChatResponse(question) {
-      const q = question.toLowerCase();
-      if (q.includes('score') || q.includes('p_fare')) {
-        const topHub = state.matrix?.hubs[0];
-        if (topHub) {
-          return `The top hub is ${topHub.name} with a P_fare of ${topHub.pFare}%. This is based on ${topHub.arrivals.length} arrivals, weather conditions, and supply factors.`;
-        }
-      }
-      if (q.includes('rank') || q.includes('queue')) {
-        return 'Licensed taxis with rank permits (FreeNow, Independent) have priority at airport ranks. Uber and Bolt drivers must use app-only pickup zones.';
-      }
-      if (q.includes('weather') || q.includes('rain')) {
-        const weather = state.brief?.hubs[0]?.weather;
-        if (weather) {
-          return `Current conditions: ${weather.precipMmHr}mm/hr rain, ${weather.tempC}°C. ${weather.precipMmHr > 5 ? 'Heavy rain is increasing demand for rides.' : 'Light conditions, normal demand.'}`;
-        }
-      }
-      if (q.includes('yield') || q.includes('earn') || q.includes('money')) {
-        const yieldEl = document.getElementById('yield-value');
-        if (yieldEl && yieldEl.textContent !== '—') {
-          return `Based on current scores, you could save ${state.matrix?.hubs[0]?.pFare || 0}% wait time, potentially earning €${yieldEl.textContent.replace('€', '')} extra per shift.`;
-        }
-      }
-      return 'I can help with score explanations, rank rules, weather impacts, or transit policies. Try asking about the top-ranked hub or current weather conditions.';
-    }
-
-    // ─── Feedback ───
-    window.submitFeedback = function(outcome) {
-      const buttons = document.querySelectorAll('.feedback-btn');
-      buttons.forEach(btn => btn.classList.remove('submitted'));
-      event.target.classList.add('submitted');
-
-      const log = {
-        sessionId: state.sessionId,
-        timestamp: new Date().toISOString(),
-        city: state.city,
-        platform: state.platform,
-        selectedHub: state.selectedHub,
-        outcome,
-        pFare: state.matrix?.hubs.find(h => h.hubId === state.selectedHub)?.pFare
-      };
-
-      const logs = JSON.parse(localStorage.getItem('turas_feedback') || '[]');
-      logs.push(log);
-      localStorage.setItem('turas_feedback', JSON.stringify(logs));
-
-      console.log('[Turas AI] Feedback logged:', log);
-    };
 
     // ─── Main Pipeline ───
     async function runPipeline() {
       try {
+        updateStatusLED('live');
+        
         const researcher = new TurasResearcher();
         state.brief = await researcher.collect({
           city: state.city,
           platform: state.platform,
-          mode: state.mode,
           sessionId: state.sessionId
         });
 
         const designer = new TurasDesigner(state.brief);
         state.matrix = await designer.evaluate();
 
-        // Maker agent: build payload
         const payload = buildPayload(state.matrix, state.brief, state.driverCoords);
-        console.log('[Turas AI] Maker payload:', payload);
-
-        // Manager agent: audit
         const auditResult = audit(state.matrix, state.brief, state);
-        console.log('[Turas AI] Manager audit:', auditResult);
 
-        // Render UI
         renderHubList(state.matrix);
         renderMapMarkers(state.matrix);
-        await renderWeatherStrip(state.brief);
 
-        // Update yield display
-        if (auditResult.yieldEstimate) {
-          document.getElementById('yield-value').textContent = `€${auditResult.yieldEstimate.yieldGainEuro}/shift`;
-        }
-
-        // Log execution
         const logs = JSON.parse(localStorage.getItem('turas_logs') || '[]');
         logs.push(payload.logObject);
         localStorage.setItem('turas_logs', JSON.stringify(logs.slice(-100)));
@@ -1017,45 +870,21 @@
         }
       } catch (err) {
         console.error('[Turas AI] Pipeline error:', err);
+        updateStatusLED('error');
       }
     }
 
-    // ─── Mode Toggle ───
-    window.toggleMode = function() {
-      const btn = document.getElementById('mode-toggle');
-      if (state.mode === 'stationary') {
-        state.mode = 'drive';
-        document.getElementById('app').classList.add('drive-mode');
-        btn.classList.add('active');
-        btn.querySelector('.mode-label').textContent = 'Stationary Mode';
-      } else {
-        state.mode = 'stationary';
-        document.getElementById('app').classList.remove('drive-mode');
-        btn.classList.remove('active');
-        btn.querySelector('.mode-label').textContent = 'Drive Mode';
-      }
-    };
-
-    // ─── City & Platform ───
-    window.changeCity = function(city) {
-      state.city = city;
-      state.map.setView(cityCoords[city], 11);
-      runPipeline();
-    };
-
-    window.changePlatform = function(platform) {
-      state.platform = platform;
-      runPipeline();
-    };
-
     // ─── Init ───
     initMap();
+    
+    if (state.locationMode === 'demo') {
+      placeDemoDriver();
+    }
+    
     runPipeline();
 
     setInterval(() => {
-      if (state.mode === 'stationary') {
-        runPipeline();
-      }
+      runPipeline();
     }, 300000);
   </script>
 </body>
