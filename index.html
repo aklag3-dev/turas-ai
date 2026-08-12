@@ -136,6 +136,19 @@
       font-weight: 600;
       color: var(--text-primary);
     }
+    .score-bar {
+      width: 100%;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin-top: 0.5rem;
+      overflow: hidden;
+    }
+    .score-bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
     .section-title {
       font-size: 0.75rem;
       text-transform: uppercase;
@@ -359,6 +372,58 @@
       font-size: 0.875rem;
       font-weight: 500;
     }
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.5); opacity: 0.5; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .driver-marker {
+      width: 20px;
+      height: 20px;
+      background: #3b82f6;
+      border: 3px solid white;
+      border-radius: 50%;
+      box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+      animation: pulse 2s infinite;
+    }
+    .location-btn {
+      padding: 0.5rem 1rem;
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      border-radius: 0.375rem;
+      color: var(--text-primary);
+      cursor: pointer;
+      font-size: 0.875rem;
+      transition: all 0.2s;
+    }
+    .location-btn:hover {
+      border-color: var(--green);
+    }
+    .location-btn.active {
+      background: var(--green);
+      color: var(--bg-dark);
+      border-color: var(--green);
+    }
+    .location-controls {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    .yield-panel {
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 0.75rem;
+    }
+    .yield-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--green);
+    }
+    .yield-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
   </style>
 </head>
 <body>
@@ -381,6 +446,10 @@
       </select>
     </div>
     <div class="header-right">
+      <div class="location-controls">
+        <button class="location-btn" id="gps-btn" onclick="requestGPS()">📍 GPS</button>
+        <button class="location-btn" id="demo-btn" onclick="demoMode()">🎲 Demo</button>
+      </div>
       <button class="mode-btn" id="mode-toggle" onclick="toggleMode()">
         <span class="mode-icon">🚗</span>
         <span class="mode-label">Drive Mode</span>
@@ -426,6 +495,11 @@
         </div>
       </div>
 
+      <div class="yield-panel">
+        <div class="yield-label">Estimated Yield Gain</div>
+        <div class="yield-value" id="yield-value">—</div>
+      </div>
+
       <div class="feedback-panel">
         <div class="section-title">Outcome Feedback</div>
         <div class="feedback-buttons">
@@ -441,6 +515,8 @@
     import { TurasResearcher } from './agents/researcher-agent.js';
     import { TurasDesigner } from './agents/designer-agent.js';
 
+    const WORKER_URL = 'https://turas-ai-proxy.symphony-driver-assist.workers.dev';
+
     const state = {
       sessionId: crypto.randomUUID(),
       city: 'dublin',
@@ -451,7 +527,10 @@
       brief: null,
       map: null,
       markers: [],
-      routeLine: null
+      routeLine: null,
+      driverMarker: null,
+      driverCoords: null,
+      locationMode: 'city-center'
     };
 
     const cityCoords = {
@@ -460,6 +539,117 @@
       shannon: [52.7019, -8.9243]
     };
 
+    const cityBounds = {
+      dublin: { latMin: 53.2, latMax: 53.5, lngMin: -6.5, lngMax: -6.0 },
+      cork: { latMin: 51.8, latMax: 52.0, lngMin: -8.6, lngMax: -8.3 },
+      shannon: { latMin: 52.5, latMax: 52.8, lngMin: -9.1, lngMax: -8.7 }
+    };
+
+    // ─── Maker Agent (Payload Engineer) ───
+    function buildPayload(matrix, brief, driverCoords) {
+      const geojson = {
+        type: 'FeatureCollection',
+        features: matrix.hubs.map(hub => ({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [hub.lng, hub.lat] },
+          properties: {
+            hubId: hub.hubId,
+            name: hub.name,
+            pFare: hub.pFare,
+            pinColor: hub.pinColor,
+            rank: hub.rank,
+            nPax: hub.nPax,
+            arrivals: hub.arrivals.length,
+            rationale: hub.rationale
+          }
+        }))
+      };
+
+      const logObject = {
+        sessionId: state.sessionId,
+        timestamp: new Date().toISOString(),
+        city: state.city,
+        platform: state.platform,
+        mode: state.mode,
+        driverCoords: driverCoords ? { lat: driverCoords.lat, lng: driverCoords.lng } : null,
+        selectedHub: state.selectedHub,
+        topHubId: matrix.summary.topHubId,
+        topPFare: matrix.summary.topPFare,
+        hubCount: matrix.hubs.length,
+        avgPFare: matrix.summary.avgPFare
+      };
+
+      const botContext = {
+        topHub: matrix.hubs[0] ? {
+          name: matrix.hubs[0].name,
+          pFare: matrix.hubs[0].pFare,
+          rationale: matrix.hubs[0].rationale,
+          arrivals: matrix.hubs[0].arrivals.length
+        } : null,
+        weather: brief.hubs[0]?.weather || null,
+        totalHubs: matrix.hubs.length
+      };
+
+      return { geojson, logObject, botContext };
+    }
+
+    // ─── Manager Agent (Governance Lead) ───
+    function audit(matrix, brief, session) {
+      const zeroPIICheck = {
+        passed: true,
+        violations: [],
+        timestamp: new Date().toISOString()
+      };
+
+      const fields = [session, matrix, brief];
+      const piiPatterns = [/@/, /\b\d{10}\b/, /\b[A-Z]{2}\d{3,}\b/];
+
+      for (const field of fields) {
+        const str = JSON.stringify(field);
+        for (const pattern of piiPatterns) {
+          if (pattern.test(str)) {
+            zeroPIICheck.passed = false;
+            zeroPIICheck.violations.push(`Pattern ${pattern} found`);
+          }
+        }
+      }
+
+      const yieldEstimate = calculateYieldEstimate(matrix);
+
+      const executionLog = {
+        sessionId: session.sessionId,
+        timestamp: new Date().toISOString(),
+        pipelineDuration: null,
+        zeroPIICheck: zeroPIICheck.passed,
+        yieldEstimate,
+        auditComplete: true
+      };
+
+      return { zeroPIICheck, yieldEstimate, executionLog };
+    }
+
+    function calculateYieldEstimate(matrix) {
+      if (!matrix.hubs || matrix.hubs.length === 0) return null;
+
+      const topHub = matrix.hubs[0];
+      const avgFare = 18;
+      const currentWaitTime = 45;
+      const optimizedWaitTime = Math.max(5, currentWaitTime * (1 - topHub.pFare / 100));
+      const timeSaved = currentWaitTime - optimizedWaitTime;
+      const extraFaresPerShift = Math.floor(timeSaved / 20);
+      const yieldGain = extraFaresPerShift * avgFare;
+
+      return {
+        topHub: topHub.name,
+        topPFare: topHub.pFare,
+        timeSavedMinutes: timeSaved,
+        extraFaresPerShift: extraFaresPerShift,
+        yieldGainEuro: yieldGain,
+        confidence: topHub.pFare >= 80 ? 'high' : topHub.pFare >= 50 ? 'medium' : 'low'
+      };
+    }
+
+    // ─── Map Initialization ───
     function initMap() {
       state.map = L.map('map').setView(cityCoords[state.city], 11);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -467,11 +657,110 @@
       }).addTo(state.map);
     }
 
+    // ─── Driver Marker ───
+    function updateDriverMarker(lat, lng) {
+      if (state.driverMarker) {
+        state.driverMarker.setLatLng([lat, lng]);
+      } else {
+        state.driverMarker = L.marker([lat, lng], {
+          icon: L.divIcon({
+            className: 'driver-marker-wrapper',
+            html: '<div class="driver-marker"></div>',
+            iconSize: [20, 20]
+          })
+        }).addTo(state.map);
+        state.driverMarker.bindPopup('Your location');
+      }
+      state.driverCoords = { lat, lng };
+    }
+
+    // ─── Route Polyline ───
+    function drawRouteToHub(hub) {
+      if (state.routeLine) {
+        state.map.removeLayer(state.routeLine);
+      }
+      if (!state.driverCoords) return;
+
+      state.routeLine = L.polyline([
+        [state.driverCoords.lat, state.driverCoords.lng],
+        [hub.lat, hub.lng]
+      ], {
+        color: '#22c55e',
+        weight: 4,
+        opacity: 0.7,
+        dashArray: '10, 10'
+      }).addTo(state.map);
+
+      const distance = calculateDistance(
+        state.driverCoords.lat, state.driverCoords.lng,
+        hub.lat, hub.lng
+      );
+      const duration = Math.round(distance * 2);
+
+      state.routeLine.bindPopup(`
+        <strong>Route to ${hub.name}</strong><br>
+        Distance: ${distance.toFixed(1)} km<br>
+        Est. time: ${duration} mins
+      `);
+    }
+
+    function calculateDistance(lat1, lng1, lat2, lng2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLng = (lng2 - lng1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLng/2) * Math.sin(dLng/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    }
+
+    // ─── Geolocation ───
+    window.requestGPS = function() {
+      if (!navigator.geolocation) {
+        alert('Geolocation not supported by your browser');
+        return;
+      }
+
+      document.getElementById('gps-btn').classList.add('active');
+      document.getElementById('demo-btn').classList.remove('active');
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          updateDriverMarker(position.coords.latitude, position.coords.longitude);
+          state.locationMode = 'gps';
+          state.map.setView([position.coords.latitude, position.coords.longitude], 13);
+          runPipeline();
+        },
+        (error) => {
+          alert('Unable to get location: ' + error.message);
+          document.getElementById('gps-btn').classList.remove('active');
+        }
+      );
+    };
+
+    window.demoMode = function() {
+      const bounds = cityBounds[state.city];
+      const lat = bounds.latMin + Math.random() * (bounds.latMax - bounds.latMin);
+      const lng = bounds.lngMin + Math.random() * (bounds.lngMax - bounds.lngMin);
+
+      updateDriverMarker(lat, lng);
+      state.locationMode = 'demo';
+      state.map.setView([lat, lng], 13);
+
+      document.getElementById('demo-btn').classList.add('active');
+      document.getElementById('gps-btn').classList.remove('active');
+
+      runPipeline();
+    };
+
+    // ─── Hub List Rendering ───
     function renderHubList(matrix) {
       const container = document.getElementById('hub-list');
       container.innerHTML = matrix.hubs.map(hub => {
         const colorClass = hub.pFare >= 80 ? 'pfare-green' : hub.pFare >= 50 ? 'pfare-amber' : 'pfare-red';
         const selected = state.selectedHub === hub.hubId ? 'selected' : '';
+        const barColor = hub.pFare >= 80 ? 'var(--green)' : hub.pFare >= 50 ? 'var(--amber)' : 'var(--red)';
         return `
           <div class="hub-card ${selected}" onclick="selectHub('${hub.hubId}')">
             <div class="hub-header">
@@ -492,11 +781,15 @@
                 <span class="stat-value">#${hub.rank}</span>
               </div>
             </div>
+            <div class="score-bar">
+              <div class="score-bar-fill" style="width: ${hub.pFare}%; background: ${barColor};"></div>
+            </div>
           </div>
         `;
       }).join('');
     }
 
+    // ─── Map Markers ───
     function renderMapMarkers(matrix) {
       state.markers.forEach(m => state.map.removeLayer(m));
       state.markers = [];
@@ -522,8 +815,48 @@
       });
     }
 
-    function renderWeatherStrip(brief) {
+    // ─── Weather Strip (Live Data) ───
+    async function renderWeatherStrip(brief) {
       const container = document.getElementById('weather-strip');
+      const coords = cityCoords[state.city];
+
+      try {
+        const resp = await fetch(`${WORKER_URL}/api/weather?lat=${coords.lat}&lon=${coords.lng}`);
+        if (!resp.ok) throw new Error('Weather API failed');
+        const data = await resp.json();
+
+        if (data.data && data.data.time) {
+          const now = new Date();
+          const currentHour = now.getHours();
+          const hours = [];
+
+          for (let i = 0; i < 6; i++) {
+            const hourIdx = data.data.time.findIndex(t => new Date(t).getHours() >= (currentHour + i) % 24);
+            if (hourIdx >= 0) {
+              hours.push({
+                time: new Date(data.data.time[hourIdx]).getHours() + ':00',
+                temp: Math.round(data.data.temperature_2m[hourIdx]),
+                rain: Math.round(data.data.precipitation[hourIdx] * 10) / 10
+              });
+            }
+          }
+
+          if (hours.length > 0) {
+            container.innerHTML = hours.map(h => `
+              <div class="weather-hour">
+                <div class="weather-time">${h.time}</div>
+                <div class="weather-temp">${h.temp}°C</div>
+                <div class="weather-rain">${h.rain}mm</div>
+              </div>
+            `).join('');
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Weather fetch failed, using fallback:', e);
+      }
+
+      // Fallback to brief data
       const weather = brief.hubs[0]?.weather;
       if (!weather) {
         container.innerHTML = '<div>No weather data</div>';
@@ -552,6 +885,7 @@
       `).join('');
     }
 
+    // ─── Hub Selection ───
     window.selectHub = function(hubId) {
       state.selectedHub = hubId;
       renderHubList(state.matrix);
@@ -559,10 +893,12 @@
       const hub = state.matrix.hubs.find(h => h.hubId === hubId);
       if (hub) {
         state.map.setView([hub.lat, hub.lng], 13);
+        drawRouteToHub(hub);
         speakUpdate(hub);
       }
     };
 
+    // ─── TTS ───
     function speakUpdate(hub) {
       if (state.mode !== 'drive') return;
       const msg = `Turas AI update: ${hub.name} score is ${hub.pFare} percent. ${hub.rationale}`;
@@ -573,6 +909,7 @@
       }
     }
 
+    // ─── Chatbot ───
     window.handleChat = function() {
       const input = document.getElementById('chat-input');
       const question = input.value.trim();
@@ -606,9 +943,16 @@
           return `Current conditions: ${weather.precipMmHr}mm/hr rain, ${weather.tempC}°C. ${weather.precipMmHr > 5 ? 'Heavy rain is increasing demand for rides.' : 'Light conditions, normal demand.'}`;
         }
       }
+      if (q.includes('yield') || q.includes('earn') || q.includes('money')) {
+        const yieldEl = document.getElementById('yield-value');
+        if (yieldEl && yieldEl.textContent !== '—') {
+          return `Based on current scores, you could save ${state.matrix?.hubs[0]?.pFare || 0}% wait time, potentially earning €${yieldEl.textContent.replace('€', '')} extra per shift.`;
+        }
+      }
       return 'I can help with score explanations, rank rules, weather impacts, or transit policies. Try asking about the top-ranked hub or current weather conditions.';
     }
 
+    // ─── Feedback ───
     window.submitFeedback = function(outcome) {
       const buttons = document.querySelectorAll('.feedback-btn');
       buttons.forEach(btn => btn.classList.remove('submitted'));
@@ -631,6 +975,7 @@
       console.log('[Turas AI] Feedback logged:', log);
     };
 
+    // ─── Main Pipeline ───
     async function runPipeline() {
       try {
         const researcher = new TurasResearcher();
@@ -644,9 +989,28 @@
         const designer = new TurasDesigner(state.brief);
         state.matrix = await designer.evaluate();
 
+        // Maker agent: build payload
+        const payload = buildPayload(state.matrix, state.brief, state.driverCoords);
+        console.log('[Turas AI] Maker payload:', payload);
+
+        // Manager agent: audit
+        const auditResult = audit(state.matrix, state.brief, state);
+        console.log('[Turas AI] Manager audit:', auditResult);
+
+        // Render UI
         renderHubList(state.matrix);
         renderMapMarkers(state.matrix);
-        renderWeatherStrip(state.brief);
+        await renderWeatherStrip(state.brief);
+
+        // Update yield display
+        if (auditResult.yieldEstimate) {
+          document.getElementById('yield-value').textContent = `€${auditResult.yieldEstimate.yieldGainEuro}/shift`;
+        }
+
+        // Log execution
+        const logs = JSON.parse(localStorage.getItem('turas_logs') || '[]');
+        logs.push(payload.logObject);
+        localStorage.setItem('turas_logs', JSON.stringify(logs.slice(-100)));
 
         if (state.matrix.hubs.length > 0) {
           selectHub(state.matrix.hubs[0].hubId);
@@ -656,26 +1020,7 @@
       }
     }
 
-    initMap();
-    runPipeline();
-
-    setInterval(() => {
-      if (state.mode === 'stationary') {
-        runPipeline();
-      }
-    }, 300000);
-
-    window.changeCity = function(city) {
-      state.city = city;
-      state.map.setView(cityCoords[city], 11);
-      runPipeline();
-    };
-
-    window.changePlatform = function(platform) {
-      state.platform = platform;
-      runPipeline();
-    };
-
+    // ─── Mode Toggle ───
     window.toggleMode = function() {
       const btn = document.getElementById('mode-toggle');
       if (state.mode === 'stationary') {
@@ -690,6 +1035,28 @@
         btn.querySelector('.mode-label').textContent = 'Drive Mode';
       }
     };
+
+    // ─── City & Platform ───
+    window.changeCity = function(city) {
+      state.city = city;
+      state.map.setView(cityCoords[city], 11);
+      runPipeline();
+    };
+
+    window.changePlatform = function(platform) {
+      state.platform = platform;
+      runPipeline();
+    };
+
+    // ─── Init ───
+    initMap();
+    runPipeline();
+
+    setInterval(() => {
+      if (state.mode === 'stationary') {
+        runPipeline();
+      }
+    }, 300000);
   </script>
 </body>
 </html>
