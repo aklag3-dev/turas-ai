@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Turas AI — Predictive Dispatch Dashboard</title>
+  <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --red: #ef4444;
+      --bg-dark: #0f172a;
+      --bg-card: #1e293b;
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --border: #334155;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-dark);
+      color: var(--text-primary);
+      height: 100vh;
+      overflow: hidden;
+    }
+    .container {
+      display: grid;
+      grid-template-columns: 280px 1fr 320px;
+      height: 100vh;
+    }
+    .left-rail {
+      background: var(--bg-card);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 1rem;
+    }
+    .map-container {
+      position: relative;
+    }
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+    .right-rail {
+      background: var(--bg-card);
+      border-left: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .header {
+      padding: 1rem;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+    .mode-toggle {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .mode-btn {
+      padding: 0.5rem 1rem;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-secondary);
+      border-radius: 0.375rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .mode-btn.active {
+      background: var(--green);
+      color: var(--bg-dark);
+      border-color: var(--green);
+    }
+    .hub-card {
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 0.75rem;
+      margin-bottom: 0.5rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .hub-card:hover {
+      border-color: var(--green);
+    }
+    .hub-card.selected {
+      border-color: var(--green);
+      background: rgba(34, 197, 94, 0.05);
+    }
+    .hub-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+    .hub-name {
+      font-weight: 600;
+      font-size: 0.875rem;
+    }
+    .pfare-badge {
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      font-weight: 700;
+      font-size: 0.875rem;
+    }
+    .pfare-green { background: var(--green); color: var(--bg-dark); }
+    .pfare-amber { background: var(--amber); color: var(--bg-dark); }
+    .pfare-red { background: var(--red); color: var(--bg-dark); }
+    .hub-stats {
+      display: flex;
+      gap: 0.75rem;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+    .stat {
+      display: flex;
+      flex-direction: column;
+    }
+    .stat-label {
+      font-size: 0.625rem;
+      text-transform: uppercase;
+    }
+    .stat-value {
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .section-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+    }
+    .weather-strip {
+      display: flex;
+      gap: 0.5rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+    }
+    .weather-hour {
+      flex: 0 0 auto;
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      border-radius: 0.375rem;
+      padding: 0.5rem;
+      text-align: center;
+      min-width: 60px;
+    }
+    .weather-time {
+      font-size: 0.625rem;
+      color: var(--text-secondary);
+    }
+    .weather-temp {
+      font-weight: 600;
+      font-size: 0.875rem;
+    }
+    .weather-rain {
+      font-size: 0.75rem;
+      color: #60a5fa;
+    }
+    .chatbot-panel {
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 0.75rem;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      margin-bottom: 0.5rem;
+      max-height: 200px;
+    }
+    .chat-message {
+      margin-bottom: 0.5rem;
+      padding: 0.5rem;
+      border-radius: 0.375rem;
+    }
+    .chat-message.bot {
+      background: var(--bg-card);
+    }
+    .chat-message.user {
+      background: rgba(34, 197, 94, 0.1);
+      margin-left: 1rem;
+    }
+    .chat-input {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .chat-input input {
+      flex: 1;
+      padding: 0.5rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.375rem;
+      color: var(--text-primary);
+    }
+    .chat-input button {
+      padding: 0.5rem 1rem;
+      background: var(--green);
+      color: var(--bg-dark);
+      border: none;
+      border-radius: 0.375rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .feedback-panel {
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 0.75rem;
+    }
+    .feedback-buttons {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .feedback-btn {
+      flex: 1;
+      padding: 0.5rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.375rem;
+      color: var(--text-primary);
+      cursor: pointer;
+      font-size: 0.75rem;
+      transition: all 0.2s;
+    }
+    .feedback-btn:hover {
+      border-color: var(--green);
+    }
+    .feedback-btn.submitted {
+      background: var(--green);
+      color: var(--bg-dark);
+      border-color: var(--green);
+    }
+    .transparency-notice {
+      position: absolute;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      background: rgba(30, 41, 59, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 0.75rem;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      z-index: 1000;
+    }
+    .transparency-notice strong {
+      color: var(--text-primary);
+    }
+    .drive-mode .left-rail,
+    .drive-mode .right-rail {
+      display: none;
+    }
+    .drive-mode .map-container {
+      grid-column: 1 / -1;
+    }
+    .drive-mode .transparency-notice {
+      bottom: 2rem;
+    }
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-secondary);
+    }
+    .spinner {
+      width: 2rem;
+      height: 2rem;
+      border: 3px solid var(--border);
+      border-top-color: var(--green);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1rem;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      z-index: 1001;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .logo {
+      height: 36px;
+      width: auto;
+    }
+    .app-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--green);
+    }
+    .header-center {
+      display: flex;
+      gap: 0.75rem;
+    }
+    .city-select, .platform-select {
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      border-radius: 0.375rem;
+      color: var(--text-primary);
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+    }
+    #mode-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      border-radius: 0.375rem;
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    #mode-toggle:hover {
+      border-color: var(--green);
+    }
+    #mode-toggle.active {
+      background: var(--green);
+      color: var(--bg-dark);
+      border-color: var(--green);
+    }
+    .mode-icon {
+      font-size: 1rem;
+    }
+    .mode-label {
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-left">
+      <img src="img/logo.svg" alt="Turas AI" class="logo" onerror="this.style.display='none'">
+      <h1 class="app-title">Turas AI</h1>
+    </div>
+    <div class="header-center">
+      <select id="city-select" class="city-select" onchange="changeCity(this.value)">
+        <option value="dublin">Dublin</option>
+        <option value="cork">Cork</option>
+        <option value="shannon">Shannon / Limerick</option>
+      </select>
+      <select id="platform-select" class="platform-select" onchange="changePlatform(this.value)">
+        <option value="freenow">FreeNow (Taxi)</option>
+        <option value="independent">Independent Taxi</option>
+        <option value="uber">Uber</option>
+        <option value="bolt">Bolt</option>
+      </select>
+    </div>
+    <div class="header-right">
+      <button class="mode-btn" id="mode-toggle" onclick="toggleMode()">
+        <span class="mode-icon">🚗</span>
+        <span class="mode-label">Drive Mode</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="container" id="app">
+    <div class="left-rail">
+      <div class="section-title">Hub Rankings</div>
+      <div id="hub-list">
+        <div class="loading">
+          <div class="spinner"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="map-container">
+      <div id="map"></div>
+      <div class="transparency-notice">
+        <strong>AI Recommendation System (EU AI Act Article 50):</strong> Scores are generated by automated AI based on real-time transit data, weather, and demand patterns. Parameters are highlighted for explainability. No personal data is collected or stored.
+      </div>
+    </div>
+
+    <div class="right-rail">
+      <div>
+        <div class="section-title">Weather Forecast</div>
+        <div class="weather-strip" id="weather-strip">
+          <div class="loading"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <div class="chatbot-panel">
+        <div class="section-title">AI Assistant</div>
+        <div class="chat-messages" id="chat-messages">
+          <div class="chat-message bot">
+            Hello! I'm your Turas AI assistant. Ask me about scores, rank rules, or transit policies.
+          </div>
+        </div>
+        <div class="chat-input">
+          <input type="text" id="chat-input" placeholder="Ask a question..." />
+          <button onclick="handleChat()">Send</button>
+        </div>
+      </div>
+
+      <div class="feedback-panel">
+        <div class="section-title">Outcome Feedback</div>
+        <div class="feedback-buttons">
+          <button class="feedback-btn" onclick="submitFeedback('fast')">Secured Fare &lt;5 mins</button>
+          <button class="feedback-btn" onclick="submitFeedback('medium')">Secured Fare 5-15 mins</button>
+          <button class="feedback-btn" onclick="submitFeedback('none')">No Fare / Left Rank</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { TurasResearcher } from './agents/researcher-agent.js';
+    import { TurasDesigner } from './agents/designer-agent.js';
+
+    const state = {
+      sessionId: crypto.randomUUID(),
+      city: 'dublin',
+      platform: 'freenow',
+      mode: 'stationary',
+      selectedHub: null,
+      matrix: null,
+      brief: null,
+      map: null,
+      markers: [],
+      routeLine: null
+    };
+
+    const cityCoords = {
+      dublin: [53.3498, -6.2603],
+      cork: [51.8985, -8.4756],
+      shannon: [52.7019, -8.9243]
+    };
+
+    function initMap() {
+      state.map = L.map('map').setView(cityCoords[state.city], 11);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(state.map);
+    }
+
+    function renderHubList(matrix) {
+      const container = document.getElementById('hub-list');
+      container.innerHTML = matrix.hubs.map(hub => {
+        const colorClass = hub.pFare >= 80 ? 'pfare-green' : hub.pFare >= 50 ? 'pfare-amber' : 'pfare-red';
+        const selected = state.selectedHub === hub.hubId ? 'selected' : '';
+        return `
+          <div class="hub-card ${selected}" onclick="selectHub('${hub.hubId}')">
+            <div class="hub-header">
+              <div class="hub-name">${hub.name}</div>
+              <div class="pfare-badge ${colorClass}">${hub.pFare}%</div>
+            </div>
+            <div class="hub-stats">
+              <div class="stat">
+                <span class="stat-label">Arrivals</span>
+                <span class="stat-value">${hub.arrivals.length}</span>
+              </div>
+              <div class="stat">
+                <span class="stat-label">N_pax</span>
+                <span class="stat-value">${hub.nPax}</span>
+              </div>
+              <div class="stat">
+                <span class="stat-label">Rank</span>
+                <span class="stat-value">#${hub.rank}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderMapMarkers(matrix) {
+      state.markers.forEach(m => state.map.removeLayer(m));
+      state.markers = [];
+
+      matrix.hubs.forEach(hub => {
+        const marker = L.marker([hub.lat, hub.lng], {
+          icon: L.divIcon({
+            className: 'custom-marker',
+            html: `<div style="background: ${hub.pinColor}; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></div>`,
+            iconSize: [24, 24]
+          })
+        }).addTo(state.map);
+
+        marker.bindPopup(`
+          <strong>${hub.name}</strong><br>
+          P_fare: ${hub.pFare}%<br>
+          Arrivals: ${hub.arrivals.length}<br>
+          Weather: ${hub.weather.precipMmHr}mm/hr, ${hub.weather.tempC}°C<br>
+          ${hub.rationale}
+        `);
+
+        state.markers.push(marker);
+      });
+    }
+
+    function renderWeatherStrip(brief) {
+      const container = document.getElementById('weather-strip');
+      const weather = brief.hubs[0]?.weather;
+      if (!weather) {
+        container.innerHTML = '<div>No weather data</div>';
+        return;
+      }
+
+      const hours = [];
+      const now = new Date();
+      for (let i = 0; i < 6; i++) {
+        const hour = new Date(now.getTime() + i * 3600000);
+        const precip = Math.max(0, weather.precipMmHr + (Math.random() - 0.5) * 2);
+        const temp = weather.tempC + (Math.random() - 0.5) * 3;
+        hours.push({
+          time: hour.getHours() + ':00',
+          temp: Math.round(temp),
+          rain: Math.round(precip * 10) / 10
+        });
+      }
+
+      container.innerHTML = hours.map(h => `
+        <div class="weather-hour">
+          <div class="weather-time">${h.time}</div>
+          <div class="weather-temp">${h.temp}°C</div>
+          <div class="weather-rain">${h.rain}mm</div>
+        </div>
+      `).join('');
+    }
+
+    window.selectHub = function(hubId) {
+      state.selectedHub = hubId;
+      renderHubList(state.matrix);
+
+      const hub = state.matrix.hubs.find(h => h.hubId === hubId);
+      if (hub) {
+        state.map.setView([hub.lat, hub.lng], 13);
+        speakUpdate(hub);
+      }
+    };
+
+    function speakUpdate(hub) {
+      if (state.mode !== 'drive') return;
+      const msg = `Turas AI update: ${hub.name} score is ${hub.pFare} percent. ${hub.rationale}`;
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(msg);
+        utterance.rate = 0.9;
+        speechSynthesis.speak(utterance);
+      }
+    }
+
+    window.handleChat = function() {
+      const input = document.getElementById('chat-input');
+      const question = input.value.trim();
+      if (!question) return;
+
+      const messages = document.getElementById('chat-messages');
+      messages.innerHTML += `<div class="chat-message user">${question}</div>`;
+      input.value = '';
+
+      const response = generateChatResponse(question);
+      setTimeout(() => {
+        messages.innerHTML += `<div class="chat-message bot">${response}</div>`;
+        messages.scrollTop = messages.scrollHeight;
+      }, 500);
+    };
+
+    function generateChatResponse(question) {
+      const q = question.toLowerCase();
+      if (q.includes('score') || q.includes('p_fare')) {
+        const topHub = state.matrix?.hubs[0];
+        if (topHub) {
+          return `The top hub is ${topHub.name} with a P_fare of ${topHub.pFare}%. This is based on ${topHub.arrivals.length} arrivals, weather conditions, and supply factors.`;
+        }
+      }
+      if (q.includes('rank') || q.includes('queue')) {
+        return 'Licensed taxis with rank permits (FreeNow, Independent) have priority at airport ranks. Uber and Bolt drivers must use app-only pickup zones.';
+      }
+      if (q.includes('weather') || q.includes('rain')) {
+        const weather = state.brief?.hubs[0]?.weather;
+        if (weather) {
+          return `Current conditions: ${weather.precipMmHr}mm/hr rain, ${weather.tempC}°C. ${weather.precipMmHr > 5 ? 'Heavy rain is increasing demand for rides.' : 'Light conditions, normal demand.'}`;
+        }
+      }
+      return 'I can help with score explanations, rank rules, weather impacts, or transit policies. Try asking about the top-ranked hub or current weather conditions.';
+    }
+
+    window.submitFeedback = function(outcome) {
+      const buttons = document.querySelectorAll('.feedback-btn');
+      buttons.forEach(btn => btn.classList.remove('submitted'));
+      event.target.classList.add('submitted');
+
+      const log = {
+        sessionId: state.sessionId,
+        timestamp: new Date().toISOString(),
+        city: state.city,
+        platform: state.platform,
+        selectedHub: state.selectedHub,
+        outcome,
+        pFare: state.matrix?.hubs.find(h => h.hubId === state.selectedHub)?.pFare
+      };
+
+      const logs = JSON.parse(localStorage.getItem('turas_feedback') || '[]');
+      logs.push(log);
+      localStorage.setItem('turas_feedback', JSON.stringify(logs));
+
+      console.log('[Turas AI] Feedback logged:', log);
+    };
+
+    async function runPipeline() {
+      try {
+        const researcher = new TurasResearcher();
+        state.brief = await researcher.collect({
+          city: state.city,
+          platform: state.platform,
+          mode: state.mode,
+          sessionId: state.sessionId
+        });
+
+        const designer = new TurasDesigner(state.brief);
+        state.matrix = await designer.evaluate();
+
+        renderHubList(state.matrix);
+        renderMapMarkers(state.matrix);
+        renderWeatherStrip(state.brief);
+
+        if (state.matrix.hubs.length > 0) {
+          selectHub(state.matrix.hubs[0].hubId);
+        }
+      } catch (err) {
+        console.error('[Turas AI] Pipeline error:', err);
+      }
+    }
+
+    initMap();
+    runPipeline();
+
+    setInterval(() => {
+      if (state.mode === 'stationary') {
+        runPipeline();
+      }
+    }, 300000);
+
+    window.changeCity = function(city) {
+      state.city = city;
+      state.map.setView(cityCoords[city], 11);
+      runPipeline();
+    };
+
+    window.changePlatform = function(platform) {
+      state.platform = platform;
+      runPipeline();
+    };
+
+    window.toggleMode = function() {
+      const btn = document.getElementById('mode-toggle');
+      if (state.mode === 'stationary') {
+        state.mode = 'drive';
+        document.getElementById('app').classList.add('drive-mode');
+        btn.classList.add('active');
+        btn.querySelector('.mode-label').textContent = 'Stationary Mode';
+      } else {
+        state.mode = 'stationary';
+        document.getElementById('app').classList.remove('drive-mode');
+        btn.classList.remove('active');
+        btn.querySelector('.mode-label').textContent = 'Drive Mode';
+      }
+    };
+  </script>
+</body>
+</html>

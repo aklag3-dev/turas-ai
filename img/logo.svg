@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#22c55e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#16a34a;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <circle cx="25" cy="25" r="18" fill="url(#grad)" />
+  <path d="M25 12 L25 38 M18 25 L32 25" stroke="white" stroke-width="3" stroke-linecap="round" />
+  <text x="55" y="33" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="700" fill="#22c55e">Turas AI</text>
+</svg>

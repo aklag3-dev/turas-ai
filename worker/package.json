@@ -1,0 +1,14 @@
+{
+  "name": "turas-ai-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "secret:aviationstack": "wrangler secret put AVIATIONSTACK_API_KEY",
+    "secret:ors": "wrangler secret put ORS_API_KEY"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
