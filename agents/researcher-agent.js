@@ -1,34 +1,49 @@
 // Turas AI — Resident Researcher Agent
 // ES-module: exports TurasResearcher class
 // Uses Cloudflare Worker proxy for live API calls with simulated fallback
+// Radius-based hub discovery: finds all hubs within driver's selected radius
 
 const WORKER_URL = 'https://turas-ai-proxy.symphony-driver-assist.workers.dev';
 
-const HUB_DEFINITIONS = {
-  dublin: [
-    { hubId: 'dub-t1', name: 'Dublin Airport T1', lat: 53.4213, lng: -6.2700, kHub: 450, modes: ['flight'] },
-    { hubId: 'dub-t2', name: 'Dublin Airport T2', lat: 53.4273, lng: -6.2437, kHub: 450, modes: ['flight'] },
-    { hubId: 'dub-heuston', name: 'Dublin Heuston', lat: 53.3460, lng: -6.2947, kHub: 250, modes: ['train'] },
-    { hubId: 'dub-connolly', name: 'Dublin Connolly', lat: 53.3521, lng: -6.2483, kHub: 200, modes: ['train'] },
-    { hubId: 'dub-port', name: 'Dublin Port', lat: 53.3494, lng: -6.2120, kHub: 180, modes: ['ferry'] },
-  ],
-  cork: [
-    { hubId: 'ork', name: 'Cork Airport', lat: 51.8414, lng: -8.4906, kHub: 120, modes: ['flight'] },
-    { hubId: 'cork-kent', name: 'Cork Kent', lat: 51.8969, lng: -8.4664, kHub: 150, modes: ['train'] },
-    { hubId: 'ringaskiddy', name: 'Ringaskiddy', lat: 51.8167, lng: -8.2833, kHub: 100, modes: ['ferry'] },
-  ],
-  shannon: [
-    { hubId: 'snn', name: 'Shannon Airport', lat: 52.7019, lng: -8.9243, kHub: 100, modes: ['flight'] },
-    { hubId: 'limerick-colbert', name: 'Limerick Colbert', lat: 52.6597, lng: -8.6282, kHub: 120, modes: ['train'] },
-    { hubId: 'shannon-foynes', name: 'Shannon Foynes Port', lat: 52.6200, lng: -9.1000, kHub: 80, modes: ['ferry'] },
-  ],
-};
+// ─── All Irish Transit Hubs (flat registry) ───
+export const ALL_HUBS = [
+  // Dublin
+  { hubId: 'dub-t1', name: 'Dublin Airport T1', lat: 53.4213, lng: -6.2700, kHub: 450, modes: ['flight'], region: 'dublin' },
+  { hubId: 'dub-t2', name: 'Dublin Airport T2', lat: 53.4273, lng: -6.2437, kHub: 450, modes: ['flight'], region: 'dublin' },
+  { hubId: 'dub-heuston', name: 'Dublin Heuston', lat: 53.3460, lng: -6.2947, kHub: 250, modes: ['train'], region: 'dublin' },
+  { hubId: 'dub-connolly', name: 'Dublin Connolly', lat: 53.3521, lng: -6.2483, kHub: 200, modes: ['train'], region: 'dublin' },
+  { hubId: 'dub-port', name: 'Dublin Port', lat: 53.3494, lng: -6.2120, kHub: 180, modes: ['ferry'], region: 'dublin' },
+  // Cork
+  { hubId: 'ork', name: 'Cork Airport', lat: 51.8414, lng: -8.4906, kHub: 120, modes: ['flight'], region: 'cork' },
+  { hubId: 'cork-kent', name: 'Cork Kent', lat: 51.8969, lng: -8.4664, kHub: 150, modes: ['train'], region: 'cork' },
+  { hubId: 'ringaskiddy', name: 'Ringaskiddy', lat: 51.8167, lng: -8.2833, kHub: 100, modes: ['ferry'], region: 'cork' },
+  // Shannon / Limerick
+  { hubId: 'snn', name: 'Shannon Airport', lat: 52.7019, lng: -8.9243, kHub: 100, modes: ['flight'], region: 'shannon' },
+  { hubId: 'limerick-colbert', name: 'Limerick Colbert', lat: 52.6597, lng: -8.6282, kHub: 120, modes: ['train'], region: 'shannon' },
+  { hubId: 'shannon-foynes', name: 'Shannon Foynes Port', lat: 52.6200, lng: -9.1000, kHub: 80, modes: ['ferry'], region: 'shannon' },
+];
 
-const CITY_COORDS = {
-  dublin: { lat: 53.3498, lng: -6.2603 },
-  cork: { lat: 51.8985, lng: -8.4756 },
-  shannon: { lat: 52.7019, lng: -8.9243 },
-};
+// ─── Haversine distance (km) ───
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ─── Find hubs within radius ───
+function findHubsInRadius(driverLat, driverLng, radiusKm) {
+  return ALL_HUBS
+    .map(hub => ({
+      ...hub,
+      distanceKm: Math.round(haversineKm(driverLat, driverLng, hub.lat, hub.lng) * 10) / 10
+    }))
+    .filter(hub => hub.distanceKm <= radiusKm)
+    .sort((a, b) => a.distanceKm - b.distanceKm);
+}
 
 function seededRandom(seed) {
   let s = 0;
@@ -48,7 +63,7 @@ async function fetchFromWorker(endpoint, params = {}) {
   }
 }
 
-function generateSimulatedWeather(city, rand) {
+function generateSimulatedWeather(rand) {
   const precip = Math.round(rand() * 8 * 10) / 10;
   const temp = Math.round((rand() * 15 + 3) * 10) / 10;
   const wind = Math.round(rand() * 30);
@@ -157,28 +172,52 @@ function processWeatherData(weatherResp) {
 
 export class TurasResearcher {
   constructor() {
-    this.hubDefinitions = HUB_DEFINITIONS;
+    this.allHubs = ALL_HUBS;
   }
 
   async collect(config) {
-    const { city = 'dublin', platform = 'freenow', mode = 'stationary', sessionId } = config;
-    const hubs = this.hubDefinitions[city] || [];
+    const {
+      driverCoords = null,
+      radiusKm = 25,
+      platform = 'freenow',
+      mode = 'stationary',
+      sessionId
+    } = config;
+
     const generatedAt = new Date().toISOString();
-    const coords = CITY_COORDS[city] || CITY_COORDS.dublin;
     const hubData = [];
 
-    const [flightResp, weatherResp, ferryResp] = await Promise.all([
-      fetchFromWorker('/api/flights', { city }),
-      fetchFromWorker('/api/weather', { lat: coords.lat, lon: coords.lng }),
-      fetchFromWorker('/api/ferries'),
-    ]);
+    // If no driver coords, fall back to Dublin city center
+    const originLat = driverCoords?.lat || 53.3498;
+    const originLng = driverCoords?.lng || -6.2603;
 
+    // Find all hubs within radius
+    const hubsInRange = findHubsInRadius(originLat, originLng, radiusKm);
+
+    // Fetch weather for driver's location
+    const weatherResp = await fetchFromWorker('/api/weather', {
+      lat: originLat,
+      lon: originLng
+    });
     const weather = processWeatherData(weatherResp);
 
-    for (const hub of hubs) {
+    // Fetch flights for all airports in range
+    const airportsInRange = hubsInRange.filter(h => h.modes.includes('flight'));
+    let flightResp = null;
+    if (airportsInRange.length > 0) {
+      // Determine which city's airports to query
+      const regions = [...new Set(airportsInRange.map(h => h.region))];
+      const primaryRegion = regions[0] || 'dublin';
+      flightResp = await fetchFromWorker('/api/flights', { city: primaryRegion });
+    }
+
+    // Fetch ferries
+    const ferryResp = await fetchFromWorker('/api/ferries');
+
+    for (const hub of hubsInRange) {
       const rand = seededRandom(`${hub.hubId}-${generatedAt.slice(0, 13)}`);
       let arrivals = [];
-      let hubWeather = weather || generateSimulatedWeather(city, rand);
+      const hubWeather = weather || generateSimulatedWeather(rand);
       const disruptions = [];
 
       if (hub.modes.includes('flight') && flightResp) {
@@ -207,6 +246,8 @@ export class TurasResearcher {
         lat: hub.lat,
         lng: hub.lng,
         kHub: hub.kHub,
+        region: hub.region,
+        distanceKm: hub.distanceKm,
         arrivals,
         weather: hubWeather,
         disruptions,
@@ -216,7 +257,8 @@ export class TurasResearcher {
     return {
       generatedAt,
       sessionId: sessionId || crypto.randomUUID(),
-      city,
+      driverCoords: { lat: originLat, lng: originLng },
+      radiusKm,
       mode,
       platform,
       hubs: hubData,

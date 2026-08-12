@@ -80,11 +80,81 @@
       background: var(--green);
       box-shadow: 0 0 8px var(--green);
       animation: pulse-led 2s infinite;
+      position: relative;
+      cursor: pointer;
     }
     
     .status-led.error {
       background: var(--red);
       box-shadow: 0 0 8px var(--red);
+    }
+    
+    .status-tooltip {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 8px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 0.375rem;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.75rem;
+      color: var(--text-primary);
+      white-space: nowrap;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s, visibility 0.2s;
+      z-index: 1003;
+      box-shadow: 0 4px 12px var(--shadow);
+    }
+    
+    .status-led:hover .status-tooltip {
+      opacity: 1;
+      visibility: visible;
+    }
+    
+    .status-tooltip::before {
+      content: '';
+      position: absolute;
+      bottom: 100%;
+      right: 3px;
+      border: 5px solid transparent;
+      border-bottom-color: var(--border);
+    }
+    
+    .status-tooltip::after {
+      content: '';
+      position: absolute;
+      bottom: calc(100% - 1px);
+      right: 4px;
+      border: 4px solid transparent;
+      border-bottom-color: var(--bg-tertiary);
+    }
+    
+    .status-tooltip .tooltip-title {
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+    
+    .status-tooltip .tooltip-status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.25rem;
+    }
+    
+    .status-tooltip .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+    
+    .status-tooltip .status-dot.ok {
+      background: var(--green);
+    }
+    
+    .status-tooltip .status-dot.error {
+      background: var(--red);
     }
     
     @keyframes pulse-led {
@@ -94,12 +164,26 @@
     
     .header-center {
       display: flex;
-      gap: 0.5rem;
-      align-items: center;
+      gap: 0.75rem;
+      align-items: flex-end;
       flex-wrap: wrap;
     }
     
-    .city-select, .platform-select {
+    .dropdown-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+    
+    .dropdown-label {
+      font-size: 0.625rem;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    
+    .city-select, .platform-select, .radius-select {
       padding: 0.5rem 0.75rem;
       background: var(--bg-tertiary);
       border: 1px solid var(--border);
@@ -107,6 +191,10 @@
       color: var(--text-primary);
       font-size: 0.875rem;
       cursor: pointer;
+    }
+    
+    .city-select.hidden {
+      display: none;
     }
     
     .save-btn {
@@ -556,22 +644,58 @@
       <img src="img/logo.png" alt="Turas AI" class="logo">
     </div>
     <div class="header-center">
-      <select id="city-select" class="city-select" onchange="onCityPlatformChange()">
-        <option value="dublin">Dublin</option>
-        <option value="cork">Cork</option>
-        <option value="shannon">Shannon / Limerick</option>
-      </select>
-      <select id="platform-select" class="platform-select" onchange="onCityPlatformChange()">
-        <option value="freenow">FreeNow (Taxi)</option>
-        <option value="independent">Independent Taxi</option>
-        <option value="uber">Uber</option>
-        <option value="bolt">Bolt</option>
-      </select>
+      <div class="dropdown-group" id="city-group">
+        <span class="dropdown-label">Demo City</span>
+        <select id="city-select" class="city-select" onchange="onConfigChange()">
+          <option value="dublin">Dublin</option>
+          <option value="cork">Cork</option>
+          <option value="shannon">Shannon / Limerick</option>
+        </select>
+      </div>
+      <div class="dropdown-group">
+        <span class="dropdown-label">Primary Platform</span>
+        <select id="platform-select" class="platform-select" onchange="onConfigChange()">
+          <option value="freenow">FreeNow (Taxi)</option>
+          <option value="independent">Independent Taxi</option>
+          <option value="uber">Uber</option>
+          <option value="bolt">Bolt</option>
+        </select>
+      </div>
+      <div class="dropdown-group">
+        <span class="dropdown-label">Search Radius</span>
+        <select id="radius-select" class="radius-select" onchange="onConfigChange()">
+          <option value="10">10 km</option>
+          <option value="15">15 km</option>
+          <option value="20">20 km</option>
+          <option value="25" selected>25 km</option>
+          <option value="30">30 km</option>
+          <option value="35">35 km</option>
+          <option value="40">40 km</option>
+          <option value="45">45 km</option>
+          <option value="50">50 km</option>
+        </select>
+      </div>
       <button class="save-btn" id="save-btn" onclick="saveConfig()">Save</button>
     </div>
     <div class="header-right">
       <button class="location-btn" id="gps-btn" onclick="requestGPS()">📍 Allow GPS</button>
-      <div class="status-led" id="status-led"></div>
+      <div class="status-led" id="status-led">
+        <div class="status-tooltip" id="status-tooltip">
+          <div class="tooltip-title">System Status</div>
+          <div class="tooltip-status">
+            <span class="status-dot ok" id="dot-ai"></span>
+            <span>AI Agent</span>
+          </div>
+          <div class="tooltip-status">
+            <span class="status-dot ok" id="dot-mcp"></span>
+            <span>MCP Server</span>
+          </div>
+          <div class="tooltip-status">
+            <span class="status-dot ok" id="dot-api"></span>
+            <span>APIs</span>
+          </div>
+        </div>
+      </div>
       <button class="theme-toggle" onclick="toggleTheme()">🌓</button>
     </div>
   </header>
@@ -620,6 +744,7 @@
       sessionId: crypto.randomUUID(),
       city: localStorage.getItem('turas_city') || 'dublin',
       platform: localStorage.getItem('turas_platform') || 'freenow',
+      radiusKm: parseInt(localStorage.getItem('turas_radius') || '25'),
       selectedHub: null,
       matrix: null,
       brief: null,
@@ -652,6 +777,7 @@
     // Initialize selects
     document.getElementById('city-select').value = state.city;
     document.getElementById('platform-select').value = state.platform;
+    document.getElementById('radius-select').value = state.radiusKm;
 
     // ─── Maker Agent ───
     function buildPayload(matrix, brief, driverCoords) {
@@ -829,6 +955,7 @@
       }
 
       document.getElementById('gps-btn').classList.add('active');
+      document.getElementById('city-group').classList.add('hidden');
       state.locationMode = 'gps';
 
       navigator.geolocation.getCurrentPosition(
@@ -840,6 +967,7 @@
         (error) => {
           alert('Unable to get location: ' + error.message);
           document.getElementById('gps-btn').classList.remove('active');
+          document.getElementById('city-group').classList.remove('hidden');
           state.locationMode = 'demo';
           placeDemoDriver();
         }
@@ -874,26 +1002,41 @@
     // ─── Hub List Rendering ───
     function renderHubList(matrix) {
       const container = document.getElementById('hub-list');
+      
+      if (matrix.hubs.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No hubs within your search radius. Try increasing the radius.</div>';
+        return;
+      }
+      
       container.innerHTML = matrix.hubs.map(hub => {
         const colorClass = hub.pFare >= 80 ? 'pfare-green' : hub.pFare >= 50 ? 'pfare-amber' : 'pfare-red';
         const selected = state.selectedHub === hub.hubId ? 'selected' : '';
         const barColor = hub.pFare >= 80 ? 'var(--green)' : hub.pFare >= 50 ? 'var(--amber)' : 'var(--red)';
         
-        const hubType = hub.hubId.includes('airport') || hub.hubId.includes('ork') || hub.hubId.includes('snn') || hub.hubId.includes('dub-t') 
-          ? 'Airport' 
-          : hub.hubId.includes('port') || hub.hubId.includes('ringaskiddy') || hub.hubId.includes('foynes')
-          ? 'Ferry Port'
-          : 'Rail Station';
+        // Use region field for hub type, fallback to hubId parsing
+        let hubType;
+        if (hub.region) {
+          hubType = hub.modes.includes('flight') ? 'Airport' 
+                  : hub.modes.includes('ferry') ? 'Ferry Port'
+                  : 'Rail Station';
+        } else {
+          hubType = hub.hubId.includes('airport') || hub.hubId.includes('ork') || hub.hubId.includes('snn') || hub.hubId.includes('dub-t') 
+            ? 'Airport' 
+            : hub.hubId.includes('port') || hub.hubId.includes('ringaskiddy') || hub.hubId.includes('foynes')
+            ? 'Ferry Port'
+            : 'Rail Station';
+        }
         
         const weather = hub.weather;
         const weatherIcon = weather.precipMmHr > 5 ? '🌧️' : weather.precipMmHr > 2 ? '🌦️' : weather.tempC <= 3 ? '❄️' : '☀️';
+        const distanceStr = hub.distanceKm != null ? `${hub.distanceKm} km` : '';
         
         return `
           <div class="hub-card ${selected}" onclick="selectHub('${hub.hubId}')" data-hub-id="${hub.hubId}">
             <div class="hub-header">
               <div>
                 <div class="hub-name">${hub.name}</div>
-                <div class="hub-type">${hubType}</div>
+                <div class="hub-type">${hubType}${distanceStr ? ' · ' + distanceStr : ''}</div>
               </div>
               <div class="pfare-badge ${colorClass}">${hub.pFare}%</div>
             </div>
@@ -937,11 +1080,12 @@
           })
         }).addTo(state.map);
 
+        const distStr = hub.distanceKm != null ? `<br>Distance: ${hub.distanceKm} km` : '';
         marker.bindPopup(`
           <strong>${hub.name}</strong><br>
           P_fare: ${hub.pFare}%<br>
           Arrivals: ${hub.arrivals.length}<br>
-          Weather: ${hub.weather.precipMmHr}mm/hr, ${hub.weather.tempC}°C<br>
+          Weather: ${hub.weather.precipMmHr}mm/hr, ${hub.weather.tempC}°C${distStr}<br>
           ${hub.rationale}
         `);
 
@@ -973,7 +1117,7 @@
     };
 
     // ─── Config Save ───
-    window.onCityPlatformChange = function() {
+    window.onConfigChange = function() {
       state.configSaved = false;
       document.getElementById('save-btn').disabled = false;
     };
@@ -981,14 +1125,21 @@
     window.saveConfig = async function() {
       state.city = document.getElementById('city-select').value;
       state.platform = document.getElementById('platform-select').value;
+      state.radiusKm = parseInt(document.getElementById('radius-select').value);
       
       localStorage.setItem('turas_city', state.city);
       localStorage.setItem('turas_platform', state.platform);
+      localStorage.setItem('turas_radius', state.radiusKm.toString());
       
       state.configSaved = true;
       document.getElementById('save-btn').disabled = true;
       
-      state.map.setView(cityCoords[state.city], 11);
+      // In demo mode, re-center map on selected city
+      if (state.locationMode === 'demo') {
+        state.map.setView(cityCoords[state.city], 11);
+        placeDemoDriver();
+      }
+      
       await runPipeline();
     };
 
@@ -1087,9 +1238,18 @@
       try {
         updateStatusLED('live');
         
+        // Determine driver coordinates
+        let driverCoords = state.driverCoords;
+        if (!driverCoords && state.locationMode === 'demo') {
+          // Fall back to city center for demo if no driver placed yet
+          const coords = cityCoords[state.city] || cityCoords.dublin;
+          driverCoords = { lat: coords[0], lng: coords[1] };
+        }
+        
         const researcher = new TurasResearcher();
         state.brief = await researcher.collect({
-          city: state.city,
+          driverCoords,
+          radiusKm: state.radiusKm,
           platform: state.platform,
           sessionId: state.sessionId
         });
@@ -1102,6 +1262,18 @@
 
         renderHubList(state.matrix);
         renderMapMarkers(state.matrix);
+        
+        // Fit map to show all hubs and driver
+        const allPoints = [];
+        if (state.driverCoords) {
+          allPoints.push([state.driverCoords.lat, state.driverCoords.lng]);
+        }
+        state.matrix.hubs.forEach(h => {
+          allPoints.push([h.lat, h.lng]);
+        });
+        if (allPoints.length > 0) {
+          state.map.fitBounds(allPoints, { padding: [50, 50], maxZoom: 13 });
+        }
 
         const logs = JSON.parse(localStorage.getItem('turas_logs') || '[]');
         logs.push(payload.logObject);

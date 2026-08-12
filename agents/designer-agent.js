@@ -86,7 +86,7 @@ export class TurasDesigner {
   }
 
   async evaluate() {
-    const { hubs, city, platform, sessionId, generatedAt } = this.brief;
+    const { hubs, driverCoords, radiusKm, platform, sessionId, generatedAt } = this.brief;
     const hour = new Date(generatedAt).getHours();
     const results = [];
 
@@ -101,6 +101,8 @@ export class TurasDesigner {
 
       const result = {
         hubId: hub.hubId, name: hub.name, lat: hub.lat, lng: hub.lng, kHub: hub.kHub,
+        region: hub.region || null,
+        distanceKm: hub.distanceKm || null,
         nPax: Math.round(nPax), sBase: Math.round(sBase * 10) / 10,
         mWeather: Math.round(mWeather * 1000) / 1000,
         mDisrupt: Math.round(mDisrupt * 1000) / 1000,
@@ -123,7 +125,7 @@ export class TurasDesigner {
     const topHub = results[0];
 
     return {
-      sessionId, city, platform, generatedAt,
+      sessionId, driverCoords, radiusKm, platform, generatedAt,
       summary: {
         hubCount: results.length,
         avgPFare,
