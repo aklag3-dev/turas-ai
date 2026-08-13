@@ -201,7 +201,7 @@
       display: none;
     }
     
-    .save-btn {
+    .search-btn {
       padding: 0.5rem 1rem;
       background: var(--green);
       color: white;
@@ -213,13 +213,13 @@
       transition: all 0.2s;
     }
     
-    .save-btn:disabled {
+    .search-btn:disabled {
       background: var(--text-muted);
       cursor: not-allowed;
       opacity: 0.6;
     }
     
-    .save-btn:not(:disabled):hover {
+    .search-btn:not(:disabled):hover {
       background: #16a34a;
     }
     
@@ -679,7 +679,7 @@
           <option value="50">50 km</option>
         </select>
       </div>
-      <button class="save-btn" id="save-btn" onclick="saveConfig()">Save</button>
+      <button class="search-btn" id="search-btn" onclick="beginSearch()">Begin Search</button>
     </div>
     <div class="header-right">
       <button class="location-btn" id="gps-btn" onclick="requestGPS()">📍 Allow GPS</button>
@@ -966,7 +966,15 @@
         async (position) => {
           updateDriverMarker(position.coords.latitude, position.coords.longitude);
           state.map.setView([position.coords.latitude, position.coords.longitude], 13);
-          await runPipeline();
+          // Don't auto-run pipeline - let user click "Begin Search"
+          // Update the welcome message to reflect GPS is ready
+          document.getElementById('hub-list').innerHTML = `
+            <div style="text-align:center;padding:2rem;color:var(--text-muted);">
+              <div style="font-size:2rem;margin-bottom:1rem;">📍</div>
+              <div style="font-weight:600;margin-bottom:0.5rem;color:var(--text-primary);">GPS Location Acquired</div>
+              <div>Set your platform and search radius, then click <strong>"Begin Search"</strong> to find nearby transit hubs.</div>
+            </div>
+          `;
         },
         (error) => {
           alert('Unable to get location: ' + error.message);
@@ -1120,13 +1128,14 @@
       }
     };
 
-    // ─── Config Save ───
+    // ─── Search Control ───
     window.onConfigChange = function() {
       state.configSaved = false;
-      document.getElementById('save-btn').disabled = false;
+      document.getElementById('search-btn').disabled = false;
+      document.getElementById('search-btn').textContent = 'Begin Search';
     };
 
-    window.saveConfig = async function() {
+    window.beginSearch = async function() {
       state.city = document.getElementById('city-select').value;
       state.platform = document.getElementById('platform-select').value;
       state.radiusKm = parseInt(document.getElementById('radius-select').value);
@@ -1136,7 +1145,9 @@
       localStorage.setItem('turas_radius', state.radiusKm.toString());
       
       state.configSaved = true;
-      document.getElementById('save-btn').disabled = true;
+      const btn = document.getElementById('search-btn');
+      btn.disabled = true;
+      btn.textContent = 'Searching...';
       
       // In demo mode, re-center map on selected city
       if (state.locationMode === 'demo') {
@@ -1144,7 +1155,10 @@
         placeDemoDriver();
       }
       
+      // Run the pipeline to search for hubs
       await runPipeline();
+      
+      btn.textContent = 'Begin Search';
     };
 
     // ─── Theme Toggle ───
@@ -1299,10 +1313,24 @@
       placeDemoDriver();
     }
     
-    runPipeline();
-
+    // Show welcome message before search
+    document.getElementById('hub-list').innerHTML = `
+      <div style="text-align:center;padding:2rem;color:var(--text-muted);">
+        <div style="font-size:2rem;margin-bottom:1rem;">🔍</div>
+        <div style="font-weight:600;margin-bottom:0.5rem;color:var(--text-primary);">Ready to Search</div>
+        <div>Set your platform and search radius, then click <strong>"Begin Search"</strong> to find nearby transit hubs.</div>
+      </div>
+    `;
+    
+    // Enable the search button and wait for user to click "Begin Search"
+    document.getElementById('search-btn').disabled = false;
+    document.getElementById('search-btn').textContent = 'Begin Search';
+    
+    // Auto-refresh every 5 minutes after initial search
     setInterval(() => {
-      runPipeline();
+      if (state.matrix) {
+        runPipeline();
+      }
     }, 300000);
   </script>
 </body>
