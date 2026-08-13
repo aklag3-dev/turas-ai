@@ -500,19 +500,22 @@ ${context ? 'Current Live Dashboard Context:\n' + JSON.stringify(context, null, 
     // 1. Try Gemini API first if API key is present
     if (apiKey) {
       try {
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
         const contents = [];
+        
+        // Add system instruction as first user message
         contents.push({
           role: 'user',
-          parts: [{ text: systemPrompt }]
+          parts: [{ text: systemPrompt + '\n\nPlease acknowledge that you understand your role and are ready to help.' }]
         });
         contents.push({
           role: 'model',
-          parts: [{ text: 'Understood. I am Turas AI, ready to assist with driver recommendations and answer any questions.' }]
+          parts: [{ text: 'I understand. I am Turas AI, ready to assist drivers in Ireland with hub recommendations, weather, transport policies, and any other questions.' }]
         });
 
-        if (Array.isArray(history)) {
+        // Add conversation history
+        if (Array.isArray(history) && history.length > 0) {
           for (const h of history) {
             if (h.role && h.text) {
               contents.push({
@@ -523,6 +526,7 @@ ${context ? 'Current Live Dashboard Context:\n' + JSON.stringify(context, null, 
           }
         }
 
+        // Add the current user message
         contents.push({
           role: 'user',
           parts: [{ text: message }]
@@ -531,19 +535,30 @@ ${context ? 'Current Live Dashboard Context:\n' + JSON.stringify(context, null, 
         const resp = await fetch(geminiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents })
+          body: JSON.stringify({ 
+            contents,
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 1024
+            }
+          })
         });
 
         if (resp.ok) {
           const data = await resp.json();
           const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
           if (replyText) {
-            return Response.json({ response: replyText, model: 'gemini-2.5-flash' }, { headers: corsHeaders });
+            return Response.json({ response: replyText, model: 'gemini-2.0-flash', source: 'gemini' }, { headers: corsHeaders });
           }
+        } else {
+          const errorData = await resp.text();
+          console.error('[Turas AI Worker] Gemini API error:', resp.status, errorData);
         }
       } catch (geminiErr) {
-        console.error('[Turas AI Worker] Gemini API call error:', geminiErr);
+        console.error('[Turas AI Worker] Gemini API call error:', geminiErr?.message || geminiErr);
       }
+    } else {
+      console.warn('[Turas AI Worker] No Gemini API key found in env.GEMINI_API_KEY or env.GEMINI_KEY');
     }
 
     // 2. Try Workers AI if binding is available

@@ -32,8 +32,8 @@ function findHubsInRadius(driverLat, driverLng, radiusKm) {
     .sort((a, b) => a.distanceKm - b.distanceKm);
 }
 
-// ─── Fetch driving distance from OSRM for a single hub ───
-async function fetchDrivingDistanceKm(originLat, originLng, destLat, destLng) {
+// ─── Fetch driving distance and time from OSRM for a single hub ───
+async function fetchDrivingInfo(originLat, originLng, destLat, destLng) {
   try {
     const resp = await fetch(
       `https://router.project-osrm.org/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=false`
@@ -41,7 +41,10 @@ async function fetchDrivingDistanceKm(originLat, originLng, destLat, destLng) {
     if (resp.ok) {
       const data = await resp.json();
       if (data.routes && data.routes.length > 0) {
-        return Math.round((data.routes[0].distance / 1000) * 10) / 10; // Convert meters to km, round to 1 decimal
+        const route = data.routes[0];
+        const distanceKm = Math.round((route.distance / 1000) * 10) / 10;
+        const drivingTimeMin = Math.round(route.duration / 60);
+        return { distanceKm, drivingTimeMin };
       }
     }
   } catch (err) {
@@ -50,19 +53,30 @@ async function fetchDrivingDistanceKm(originLat, originLng, destLat, destLng) {
   return null; // Return null if routing fails (will fall back to haversine)
 }
 
-// ─── Update hubs with driving distances (replaces haversine with actual driving distance) ───
+// ─── Update hubs with driving distances and times (replaces haversine with actual driving data) ───
 async function updateWithDrivingDistances(driverLat, driverLng, hubs) {
+  // Get current time for ETA calculation
+  const now = new Date();
+  
   // Fetch driving distances in parallel (limited concurrency to avoid rate limits)
   const batchSize = 5; // Process 5 hubs at a time
   for (let i = 0; i < hubs.length; i += batchSize) {
     const batch = hubs.slice(i, i + batchSize);
     const promises = batch.map(async (hub) => {
-      const drivingDist = await fetchDrivingDistanceKm(driverLat, driverLng, hub.lat, hub.lng);
-      if (drivingDist !== null) {
-        hub.distanceKm = drivingDist; // Replace haversine with driving distance
+      const drivingInfo = await fetchDrivingInfo(driverLat, driverLng, hub.lat, hub.lng);
+      if (drivingInfo !== null) {
+        hub.distanceKm = drivingInfo.distanceKm; // Replace haversine with driving distance
+        hub.drivingTimeMin = drivingInfo.drivingTimeMin;
+        // Calculate ETA
+        const etaTime = new Date(now.getTime() + drivingInfo.drivingTimeMin * 60000);
+        hub.eta = etaTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         hub.distanceType = 'driving';
       } else {
         hub.distanceType = 'haversine'; // Fallback
+        // Estimate driving time from haversine distance (assume avg 40 km/h in urban areas)
+        hub.drivingTimeMin = Math.round((hub.distanceKm / 40) * 60);
+        const etaTime = new Date(now.getTime() + hub.drivingTimeMin * 60000);
+        hub.eta = etaTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       }
     });
     await Promise.all(promises);

@@ -477,10 +477,12 @@
     }
     
     .transparency-notice.minimized {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
       width: 40px;
       height: 40px;
       padding: 0;
-      right: 1rem;
       left: auto;
       border-radius: 50%;
       display: flex;
@@ -488,6 +490,7 @@
       justify-content: center;
       cursor: pointer;
       overflow: hidden;
+      z-index: 1002;
     }
     
     .transparency-notice.minimized .transparency-content {
@@ -1617,6 +1620,8 @@
         const temp = weather.tempC != null ? weather.tempC : 10;
         const weatherIcon = precip > 5 ? '🌧️' : precip > 2 ? '🌦️' : temp <= 3 ? '❄️' : '☀️';
         const distanceStr = hub.distanceKm != null ? `${hub.distanceKm} km` : '';
+        const drivingTimeStr = hub.drivingTimeMin != null ? ` · ~${hub.drivingTimeMin} min` : '';
+        const etaStr = hub.eta != null ? ` · ETA ${hub.eta}` : '';
         
         // Pre-search: show "--%" and hide arrivals/nPax/rank
         const pFareDisplay = isPreSearch ? '--%' : `${hub.pFare}%`;
@@ -1630,7 +1635,7 @@
             <div class="hub-header">
               <div>
                 <div class="hub-name">${hub.name || 'Transit Hub'}</div>
-                <div class="hub-type">${hubType}${distanceStr ? ' · ' + distanceStr : ''}</div>
+                <div class="hub-type">${hubType}${distanceStr ? ' · ' + distanceStr : ''}${drivingTimeStr}${etaStr}</div>
               </div>
               <div class="pfare-badge ${colorClass}">${pFareDisplay}</div>
             </div>
@@ -2331,10 +2336,14 @@
         renderHubList(state.matrix);
         renderMapMarkers(state.matrix);
         
-        // Force DOM update by triggering a reflow
+        // Explicitly force DOM update with a small delay to ensure rendering
+        await new Promise(r => setTimeout(r, 50));
         const hubList = document.getElementById('hub-list');
         if (hubList) {
+          // Force a complete re-render by toggling display
+          hubList.style.display = 'none';
           hubList.offsetHeight; // Force reflow
+          hubList.style.display = '';
         }
         
         // Fit map to show all hubs and driver
