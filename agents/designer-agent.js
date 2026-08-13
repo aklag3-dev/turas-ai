@@ -142,6 +142,8 @@ export class TurasDesigner {
         region: hub.region || null,
         modes: hub.modes || [],
         distanceKm: hub.distanceKm || null,
+        drivingTimeMin: hub.drivingTimeMin || null,
+        eta: hub.eta || null,
         nPax: Math.round(nPax),
         sBase: Math.round(sBase * 10) / 10,
         mWeather: Math.round(mWeather * 1000) / 1000,

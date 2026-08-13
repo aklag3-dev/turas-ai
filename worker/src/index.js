@@ -549,6 +549,8 @@ ${context ? 'Current Live Dashboard Context:\n' + JSON.stringify(context, null, 
           const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
           if (replyText) {
             return Response.json({ response: replyText, model: 'gemini-2.0-flash', source: 'gemini' }, { headers: corsHeaders });
+          } else {
+            console.error('[Turas AI Worker] Gemini API returned no text:', JSON.stringify(data));
           }
         } else {
           const errorData = await resp.text();
