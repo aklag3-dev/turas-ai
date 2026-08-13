@@ -743,6 +743,119 @@
       from { transform: translateX(0); opacity: 1; }
       to { transform: translateX(100%); opacity: 0; }
     }
+
+    /* ─── Persistent Recommendation Task Stepper ─── */
+    .pipeline-progress-panel {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 0.875rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 4px 12px var(--shadow);
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.6rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8rem;
+    }
+
+    .progress-title {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text-primary);
+    }
+
+    .progress-time {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    .progress-indicator-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+
+    .progress-indicator-dot.active {
+      background: #f59e0b;
+      box-shadow: 0 0 8px #f59e0b;
+      animation: pulse 1.5s infinite;
+    }
+
+    .progress-indicator-dot.completed {
+      background: #22c55e;
+      box-shadow: 0 0 8px #22c55e;
+    }
+
+    .progress-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .progress-step-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      font-size: 0.775rem;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .step-badge {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .step-badge.pending {
+      background: var(--bg-tertiary);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    .step-badge.running {
+      background: rgba(245, 158, 11, 0.15);
+      color: #f59e0b;
+      border: 1px solid #f59e0b;
+      animation: spin 1s linear infinite;
+    }
+
+    .step-badge.done {
+      background: rgba(34, 197, 94, 0.15);
+      color: #22c55e;
+      border: 1px solid #22c55e;
+    }
+
+    .step-details {
+      flex: 1;
+    }
+
+    .step-label {
+      font-weight: 600;
+      color: var(--text-primary);
+      line-height: 1.2;
+    }
+
+    .step-subtext {
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      line-height: 1.2;
+      margin-top: 2px;
+    }
   </style>
 </head>
 <body>
@@ -814,6 +927,25 @@
 
   <div class="container" id="app">
     <div class="left-rail">
+      <div id="pipeline-progress-panel" class="pipeline-progress-panel">
+        <div class="progress-header">
+          <div class="progress-title">
+            <span class="progress-indicator-dot completed" id="progress-indicator-dot"></span>
+            <strong>Recommendation Task Status</strong>
+          </div>
+          <span class="progress-time" id="progress-time">Initial Discovery</span>
+        </div>
+        <div class="progress-steps" id="progress-steps">
+          <div class="progress-step-item">
+            <span class="step-badge done">✓</span>
+            <div class="step-details">
+              <div class="step-label">Hub Registry Initialized</div>
+              <div class="step-subtext">Click "Begin Search" to evaluate live P_fare probabilities</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="section-title">Hub Rankings</div>
       <div id="hub-list">
         <div class="loading">
@@ -1273,6 +1405,43 @@
       }
     };
 
+    // ─── Persistent Progress Stepper Functions ───
+    function resetProgressPanel() {
+      const container = document.getElementById('progress-steps');
+      if (container) container.innerHTML = '';
+      const dotEl = document.getElementById('progress-indicator-dot');
+      if (dotEl) dotEl.className = 'progress-indicator-dot active';
+      const timeEl = document.getElementById('progress-time');
+      if (timeEl) timeEl.textContent = 'Processing...';
+    }
+
+    function updateProgressStep(stepIndex, label, subtext, status) {
+      const container = document.getElementById('progress-steps');
+      if (!container) return;
+
+      let stepEl = document.getElementById(`step-item-${stepIndex}`);
+      if (!stepEl) {
+        stepEl = document.createElement('div');
+        stepEl.id = `step-item-${stepIndex}`;
+        stepEl.className = 'progress-step-item';
+        container.appendChild(stepEl);
+      }
+
+      const badgeHtml = status === 'done' 
+        ? '<span class="step-badge done">✓</span>' 
+        : status === 'running' 
+        ? '<span class="step-badge running">⏳</span>' 
+        : '<span class="step-badge pending">•</span>';
+
+      stepEl.innerHTML = `
+        ${badgeHtml}
+        <div class="step-details">
+          <div class="step-label">${label}</div>
+          <div class="step-subtext">${subtext}</div>
+        </div>
+      `;
+    }
+
     // ─── Processing Banner & Toast Notifications ───
     function showProcessingBanner(radiusKm) {
       updateStatusLED('loading');
@@ -1372,20 +1541,48 @@
       btn.classList.remove('searched');
       btn.textContent = 'Searching...';
 
-      // Visual processing indication
+      // Reset progress panel & show top processing banner
+      resetProgressPanel();
       showProcessingBanner(state.radiusKm);
-      
-      // Place initial driver if no coordinates exist yet in demo mode
+
+      // Step 1: Location & Radius Discovery
+      updateProgressStep(1, '📍 Location & Radius Discovery', `Acquiring position, scanning hubs within ${state.radiusKm}km...`, 'running');
       if (state.locationMode === 'demo' && !state.driverCoords) {
         await placeDemoDriver();
       }
+      await new Promise(r => setTimeout(r, 150));
+      const latStr = state.driverCoords ? `${state.driverCoords.lat.toFixed(3)}, ${state.driverCoords.lng.toFixed(3)}` : 'Set';
+      updateProgressStep(1, '📍 Location & Radius Discovery', `Position locked (${latStr}), radius ${state.radiusKm}km`, 'done');
+
+      // Step 2: Live Ingestion
+      updateProgressStep(2, '📡 Live Ingestion (Arrivals & Weather)', 'Fetching live flights, rail, ferries & Met Éireann weather...', 'running');
       
-      // Run the full pipeline to search for hubs with P_fare calculation
+      // Run recommendation pipeline
       await runPipeline();
 
-      // Hide banner and notify user task completed
+      const hubCount = state.brief?.hubs?.length || 0;
+      updateProgressStep(2, '📡 Live Ingestion (Arrivals & Weather)', `Ingested arrivals & weather for ${hubCount} hubs`, 'done');
+
+      // Step 3: P_fare Probability Calculation
+      updateProgressStep(3, '📊 P_fare Probability Calculation', 'Computing S_base, M_weather, M_disrupt & B_supply per hub...', 'running');
+      await new Promise(r => setTimeout(r, 200));
+      const avgScore = state.matrix?.summary?.avgPFare || 0;
+      updateProgressStep(3, '📊 P_fare Probability Calculation', `Computed demand probability index (Avg P_fare: ${avgScore}%)`, 'done');
+
+      // Step 4: Hub Ranking & Route Synthesis
+      updateProgressStep(4, '🏁 Ranking & Route Synthesis', 'Ranking hubs by P_fare, clustering & establishing optimal routes...', 'running');
+      await new Promise(r => setTimeout(r, 200));
+      const topHub = state.matrix?.hubs?.[0];
+      updateProgressStep(4, '🏁 Ranking & Route Synthesis', `Top recommendation: ${topHub ? topHub.name + ' (' + topHub.pFare + '%)' : 'Complete'}`, 'done');
+
+      // Task complete: Hide banner, show toast notification & update LED
       hideProcessingBanner();
       showCompletionToast(state.matrix);
+
+      const dotEl = document.getElementById('progress-indicator-dot');
+      if (dotEl) dotEl.className = 'progress-indicator-dot completed';
+      const timeEl = document.getElementById('progress-time');
+      if (timeEl) timeEl.textContent = 'Completed ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       
       btn.textContent = 'Searched';
       btn.disabled = true;
