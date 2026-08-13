@@ -2145,19 +2145,22 @@
       messagesContainer.appendChild(botMsg);
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
+      const hasCompletedAnalysis = state.searchPerformed && state.matrix?.hubs?.[0]?.pFare !== null && state.matrix?.hubs?.[0]?.pFare !== undefined;
+      
       const context = {
         locationMode: state.locationMode,
         city: state.city,
         driverCoords: state.driverCoords,
         platform: state.platform,
         radiusKm: state.radiusKm,
-        topHub: state.matrix?.hubs?.[0] ? {
+        analysisCompleted: hasCompletedAnalysis,
+        topHub: hasCompletedAnalysis && state.matrix?.hubs?.[0] ? {
           name: state.matrix.hubs[0].name,
           pFare: state.matrix.hubs[0].pFare,
-          arrivalsCount: state.matrix.hubs[0].arrivals?.length,
+          arrivalsCount: state.matrix.hubs[0].arrivals?.length || 0,
           cluster: state.matrix.hubs[0].cluster
         } : null,
-        hubCount: state.matrix?.hubs?.length || 0,
+        hubCount: hasCompletedAnalysis ? (state.matrix?.hubs?.length || 0) : 0,
         weather: state.brief?.hubs?.[0]?.weather || null
       };
 
