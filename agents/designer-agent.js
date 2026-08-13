@@ -55,12 +55,34 @@ function computeBSupply(hour, platform) {
 }
 
 function computePFare(sBase, mWeather, mDisrupt, bSupply) {
-  const iRaw = (sBase * mWeather * mDisrupt) / bSupply;
-  return Math.min(99, Math.max(5, Math.round(iRaw)));
+  // P_fare: Probability of securing a passenger fare within target window
+  // Mathematically defensible as a bounded probability in [5%, 99%]
+  
+  // sBase is demand saturation [0, 100] — normalize to probability [0, 1]
+  const demandProb = Math.min(1, sBase / 100);
+  
+  // Weather and disruption provide multiplicative boosts (capped to prevent extremes)
+  // mWeather: 1.0 (normal) to ~1.45 (heavy rain + cold)
+  // mDisrupt: 1.0 (normal) to 1.25 (significant disruptions)
+  const weatherBoost = Math.min(1.5, mWeather);
+  const disruptBoost = Math.min(1.3, mDisrupt);
+  
+  // Supply density reduces probability per driver (inverse relationship)
+  // bSupply: ~0.7 (low supply) to ~1.3 (high supply)
+  // Normalize to reduction factor: lower supply → higher probability
+  const supplyFactor = 1 / Math.max(0.5, Math.min(1.5, bSupply));
+  
+  // Combine: probability = demand × weather_boost × disruption_boost × supply_factor
+  // This represents: P(fare) ∝ (demand_pressure × environmental_boosts) / supply_competition
+  const rawProb = demandProb * weatherBoost * disruptBoost * supplyFactor;
+  
+  // Clamp to valid probability range [0.05, 0.99] and scale to percentage
+  const clampedProb = Math.min(0.99, Math.max(0.05, rawProb));
+  return Math.round(clampedProb * 100);
 }
 
 function pinColor(pFare) {
-  if (pFare >= 80) return '#22c55e';
+  if (pFare >= 75) return '#22c55e';
   if (pFare >= 50) return '#f59e0b';
   return '#ef4444';
 }
@@ -104,7 +126,12 @@ export class TurasDesigner {
       const mDisrupt = computeMDisrupt(disruptions);
       const bSupply = computeBSupply(hour, platform);
       const pFare = computePFare(sBase, mWeather, mDisrupt, bSupply);
-      const iRaw = (sBase * mWeather * mDisrupt) / bSupply;
+      // iRaw: intermediate probability value before final percentage scaling
+      const demandProb = Math.min(1, sBase / 100);
+      const weatherBoost = Math.min(1.5, mWeather);
+      const disruptBoost = Math.min(1.3, mDisrupt);
+      const supplyFactor = 1 / Math.max(0.5, Math.min(1.5, bSupply));
+      const iRaw = demandProb * weatherBoost * disruptBoost * supplyFactor;
 
       const result = {
         hubId: hub.hubId,

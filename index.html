@@ -324,7 +324,7 @@
     
     .container {
       display: grid;
-      grid-template-columns: 320px 1fr;
+      grid-template-columns: 480px 1fr;
       height: calc(100vh - 60px);
     }
     
@@ -801,7 +801,7 @@
 
     /* ─── Hub Details Extension Panel (Left Rail Drawer) ─── */
     .hub-detail-drawer {
-      width: 360px;
+      width: 540px;
       background: var(--bg-secondary);
       border-right: 1px solid var(--border);
       display: none;
@@ -1529,11 +1529,11 @@
         // Handle pre-search mode (pFare is null)
         const isPreSearch = hub.pFare === null || hub.pFare === undefined;
         const colorClass = isPreSearch ? 'pfare-pending' : 
-                          hub.pFare >= 80 ? 'pfare-green' : 
+                          hub.pFare >= 75 ? 'pfare-green' : 
                           hub.pFare >= 50 ? 'pfare-amber' : 'pfare-red';
         const selected = state.selectedHub === hub.hubId ? 'selected' : '';
         const barColor = isPreSearch ? 'var(--text-muted)' :
-                        hub.pFare >= 80 ? 'var(--green)' : 
+                        hub.pFare >= 75 ? 'var(--green)' : 
                         hub.pFare >= 50 ? 'var(--amber)' : 'var(--red)';
         
         // Use region field for hub type, fallback to hubId parsing
@@ -1670,7 +1670,7 @@
 
       const isPreSearch = hub.pFare === null || hub.pFare === undefined;
       const pFareDisplay = isPreSearch ? '--%' : `${hub.pFare}%`;
-      const badgeClass = isPreSearch ? 'pfare-pending' : hub.pFare >= 80 ? 'pfare-green' : hub.pFare >= 50 ? 'pfare-amber' : 'pfare-red';
+      const badgeClass = isPreSearch ? 'pfare-pending' : hub.pFare >= 75 ? 'pfare-green' : hub.pFare >= 50 ? 'pfare-amber' : 'pfare-red';
       const hubType = (Array.isArray(hub.modes) && hub.modes.includes('flight')) ? 'Airport' : (Array.isArray(hub.modes) && hub.modes.includes('ferry')) ? 'Ferry Port' : 'Rail Station';
 
       document.getElementById('drawer-hub-name').textContent = hub.name || 'Transit Hub Overview';
@@ -2093,13 +2093,33 @@
 
     function generateChatResponse(question) {
       const q = question.toLowerCase();
+      const hasAnalysis = state.matrix && state.matrix.hubs && state.matrix.hubs.length > 0;
+      
+      // Pre-analysis restrictions: Don't give fare probability/recommendations before analysis
+      if (!hasAnalysis) {
+        if (q.includes('score') || q.includes('p_fare') || q.includes('probability') || q.includes('recommend') || q.includes('best hub') || q.includes('where should')) {
+          return 'I cannot provide fare probability scores or recommendations until you click **Begin Search** to analyze live transit data. Please run an analysis first to see live P_fare probabilities and hub rankings.';
+        }
+        if (q.includes('rank') || q.includes('top hub') || q.includes('which hub')) {
+          return 'Hub rankings are generated after analyzing live arrivals, weather, and driver supply. Click **Begin Search** to see live recommendations.';
+        }
+      }
+      
+      // Platform explanation (always available)
+      if (q.includes('what is turas') || q.includes('what is this') || q.includes('explain') || q.includes('about') || q.includes('platform')) {
+        return 'Turas AI is a predictive dispatch platform for taxi drivers at transit hubs. It analyzes live flight/rail/ferry arrivals, weather conditions, and driver supply to compute P_fare probabilities — helping drivers position themselves at hubs with the highest demand potential. The system uses AI to optimize driver positioning and reduce idle wait times.';
+      }
+      
+      if (q.includes('value') || q.includes('benefit') || q.includes('why use') || q.includes('how does it help')) {
+        return 'Turas AI helps drivers maximize hourly yield by identifying hubs with high passenger demand probability. By positioning at hubs with green P_fare scores (75%+), drivers can reduce wait times and increase fare opportunities. The platform processes live transit data to provide actionable, real-time recommendations.';
+      }
       
       if (q.includes('score') || q.includes('p_fare') || q.includes('probability')) {
         const topHub = state.matrix?.hubs?.[0];
         if (topHub) {
           return `The top hub is **${topHub.name}** with a P_fare probability of **${topHub.pFare}%**. This is computed from ${topHub.arrivals?.length || 0} arrivals, weather factors, and local driver supply.`;
         }
-        return 'P_fare represents the probability of securing a passenger fare at a hub. Higher scores (green 80%+) indicate shorter wait times and higher demand.';
+        return 'P_fare represents the probability of securing a passenger fare at a hub. Higher scores (green 75%+) indicate shorter wait times and higher demand.';
       }
       
       if (q.includes('rank') || q.includes('queue') || q.includes('permit') || q.includes('permit')) {
@@ -2115,7 +2135,7 @@
       }
       
       if (q.includes('yield') || q.includes('earn') || q.includes('money') || q.includes('fare')) {
-        return 'To maximize hourly yield, target hubs with green P_fare scores (80%+). Higher probabilities mean faster passenger turnover and less idle waiting time between trips.';
+        return 'To maximize hourly yield, target hubs with green P_fare scores (75%+). Higher probabilities mean faster passenger turnover and less idle waiting time between trips.';
       }
       
       if (q.includes('how') && (q.includes('work') || q.includes('calculate') || q.includes('algorithm'))) {
@@ -2128,6 +2148,12 @@
 
       if (q.includes('dublin') || q.includes('airport') || q.includes('cork') || q.includes('shannon') || q.includes('galway') || q.includes('terminal')) {
         return `Hubs in ${state.city.toUpperCase()} are monitored live. Terminal arrival peaks correlate with high P_fare surges. Check the ranking list on the left for live recommendations.`;
+      }
+
+      // Non-port questions: provide feedback but redirect to platform scope
+      const nonPortKeywords = ['food', 'restaurant', 'hotel', 'flight booking', 'train ticket', 'bus schedule', 'weather forecast tomorrow', 'news', 'sports', 'politics'];
+      if (nonPortKeywords.some(kw => q.includes(kw))) {
+        return `I appreciate your question about "${question}", but I'm specifically designed to help with transit hub recommendations and driver positioning. For questions outside this scope, I recommend checking relevant specialized services. Is there anything about Turas AI or hub recommendations I can help with?`;
       }
 
       // General intelligent assistant response

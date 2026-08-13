@@ -21,7 +21,7 @@ function haversineKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// ─── Find hubs within radius ───
+// ─── Find hubs within radius (using haversine for fast filtering) ───
 function findHubsInRadius(driverLat, driverLng, radiusKm) {
   return ALL_HUBS
     .map(hub => ({
@@ -30,6 +30,46 @@ function findHubsInRadius(driverLat, driverLng, radiusKm) {
     }))
     .filter(hub => hub.distanceKm <= radiusKm)
     .sort((a, b) => a.distanceKm - b.distanceKm);
+}
+
+// ─── Fetch driving distance from OSRM for a single hub ───
+async function fetchDrivingDistanceKm(originLat, originLng, destLat, destLng) {
+  try {
+    const resp = await fetch(
+      `https://router.project-osrm.org/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=false`
+    );
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.routes && data.routes.length > 0) {
+        return Math.round((data.routes[0].distance / 1000) * 10) / 10; // Convert meters to km, round to 1 decimal
+      }
+    }
+  } catch (err) {
+    console.warn(`[Turas AI] OSRM routing failed for hub at ${destLat},${destLng}:`, err);
+  }
+  return null; // Return null if routing fails (will fall back to haversine)
+}
+
+// ─── Update hubs with driving distances (replaces haversine with actual driving distance) ───
+async function updateWithDrivingDistances(driverLat, driverLng, hubs) {
+  // Fetch driving distances in parallel (limited concurrency to avoid rate limits)
+  const batchSize = 5; // Process 5 hubs at a time
+  for (let i = 0; i < hubs.length; i += batchSize) {
+    const batch = hubs.slice(i, i + batchSize);
+    const promises = batch.map(async (hub) => {
+      const drivingDist = await fetchDrivingDistanceKm(driverLat, driverLng, hub.lat, hub.lng);
+      if (drivingDist !== null) {
+        hub.distanceKm = drivingDist; // Replace haversine with driving distance
+        hub.distanceType = 'driving';
+      } else {
+        hub.distanceType = 'haversine'; // Fallback
+      }
+    });
+    await Promise.all(promises);
+  }
+  // Re-sort by updated distance
+  hubs.sort((a, b) => a.distanceKm - b.distanceKm);
+  return hubs;
 }
 
 // ─── Load hubs from Worker API ───
@@ -226,7 +266,9 @@ export class TurasResearcher {
     const originLat = driverCoords?.lat || 53.3498;
     const originLng = driverCoords?.lng || -6.2603;
 
-    const hubsInRange = findHubsInRadius(originLat, originLng, radiusKm);
+    const hubsInRangeRaw = findHubsInRadius(originLat, originLng, radiusKm);
+    // Update with driving distances for initial discovery as well
+    const hubsInRange = await updateWithDrivingDistances(originLat, originLng, hubsInRangeRaw);
 
     // Fetch weather for driver's location
     const weatherResp = await fetchFromWorker('/api/weather', {
@@ -285,8 +327,11 @@ export class TurasResearcher {
     const originLat = driverCoords?.lat || 53.3498;
     const originLng = driverCoords?.lng || -6.2603;
 
-    // Find all hubs within radius
-    const hubsInRange = findHubsInRadius(originLat, originLng, radiusKm);
+    // Find all hubs within radius (using haversine for fast initial filtering)
+    let hubsInRange = findHubsInRadius(originLat, originLng, radiusKm);
+    
+    // Update with actual driving distances from OSRM (replaces haversine distances)
+    hubsInRange = await updateWithDrivingDistances(originLat, originLng, hubsInRange);
 
     // Fetch weather for driver's location
     const weatherResp = await fetchFromWorker('/api/weather', {
@@ -330,9 +375,8 @@ export class TurasResearcher {
         arrivals.push(...ferryArrivals);
       }
 
-      if (arrivals.length === 0) {
-        arrivals = generateSimulatedArrivals(hub, 30, rand);
-      }
+      // Note: If no live arrivals found, arrivals array remains empty (honest representation)
+      // Previously fell back to generateSimulatedArrivals, but user requested honest data
 
       hubData.push({
         hubId: hub.hubId,
