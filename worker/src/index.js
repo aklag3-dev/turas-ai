@@ -483,7 +483,7 @@ async function handleChat(request, env, corsHeaders) {
   try {
     const body = await request.json().catch(() => ({}));
     const { message, context, apiKey: userApiKey, history = [] } = body;
-    const apiKey = userApiKey || env.GEMINI_API_KEY;
+    const apiKey = userApiKey || env.GEMINI_API_KEY || env.GEMINI_KEY;
 
     if (!message) {
       return Response.json({ error: 'Message parameter is required' }, { status: 400, headers: corsHeaders });
@@ -497,10 +497,11 @@ async function handleChat(request, env, corsHeaders) {
       }, { status: 400, headers: corsHeaders });
     }
 
-    const systemPrompt = `You are Turas AI, an intelligent driver assistant for transport hubs (airports, ferry ports, rail stations) in Ireland.
-You assist taxi and rideshare drivers in maximizing earnings, understanding hub recommendations, weather, demand patterns (P_fare), and transport rules.
-You are ALSO an AI assistant powered by Google Gemini, capable of answering ANY general question, topic, advice, math, trivia, coding, or conversation outside transport hubs.
-Keep responses concise, clear, helpful, and friendly.
+    const systemPrompt = `You are Turas AI, an intelligent assistant powered by Google Gemini (gemini-2.5-flash).
+Your purpose:
+1. Help taxi and rideshare drivers in Ireland maximize earnings, navigate transport hubs (airports, ferry ports, rail stations), understand demand probabilities (P_fare), weather, and transport policies.
+2. Answer ALL questions—whether directly related to Turas AI, transport hubs, driving strategy, OR any general question/topic outside transport hubs (e.g. general knowledge, advice, math, science, coding, trivia, current events, directions, writing, etc.).
+3. Always provide clear, accurate, concise, and helpful responses using your full Gemini AI knowledge base.
 
 ${context ? 'Current Live Dashboard Context:\n' + JSON.stringify(context, null, 2) : ''}`;
 
