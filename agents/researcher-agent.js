@@ -245,6 +245,7 @@ export class TurasResearcher {
         lng: hub.lng,
         kHub: hub.kHub,
         region: hub.region,
+        modes: hub.modes || [],
         distanceKm: hub.distanceKm,
         arrivals: [],  // No arrivals yet — shown as "--%"
         weather: hubWeather,
@@ -339,6 +340,7 @@ export class TurasResearcher {
         lng: hub.lng,
         kHub: hub.kHub,
         region: hub.region,
+        modes: hub.modes || [],
         distanceKm: hub.distanceKm,
         arrivals,
         weather: hubWeather,

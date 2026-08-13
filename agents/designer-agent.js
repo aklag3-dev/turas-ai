@@ -102,6 +102,7 @@ export class TurasDesigner {
       const result = {
         hubId: hub.hubId, name: hub.name, lat: hub.lat, lng: hub.lng, kHub: hub.kHub,
         region: hub.region || null,
+        modes: hub.modes || [],
         distanceKm: hub.distanceKm || null,
         nPax: Math.round(nPax), sBase: Math.round(sBase * 10) / 10,
         mWeather: Math.round(mWeather * 1000) / 1000,

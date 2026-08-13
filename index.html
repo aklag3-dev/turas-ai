@@ -1041,7 +1041,7 @@
         
         // Use region field for hub type, fallback to hubId parsing
         let hubType;
-        if (hub.region) {
+        if (hub.region && Array.isArray(hub.modes)) {
           hubType = hub.modes.includes('flight') ? 'Airport' 
                   : hub.modes.includes('ferry') ? 'Ferry Port'
                   : 'Rail Station';
