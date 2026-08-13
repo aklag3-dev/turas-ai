@@ -799,6 +799,152 @@
       to { transform: translateX(100%); opacity: 0; }
     }
 
+    /* ─── Hub Details Extension Panel (Left Rail Drawer) ─── */
+    .hub-detail-drawer {
+      width: 360px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      display: none;
+      flex-direction: column;
+      overflow-y: auto;
+      z-index: 1001;
+      animation: slideInLeft 0.3s ease;
+      box-shadow: 4px 0 16px var(--shadow);
+      flex-shrink: 0;
+    }
+
+    .hub-detail-drawer.open {
+      display: flex;
+    }
+
+    .drawer-header {
+      padding: 1rem 1.25rem;
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .drawer-hub-name {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1.2;
+    }
+
+    .drawer-hub-meta {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+    }
+
+    .drawer-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1.5rem;
+      padding: 0;
+      line-height: 1;
+    }
+
+    .drawer-close:hover {
+      color: var(--text-primary);
+    }
+
+    .drawer-content {
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .detail-card {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 0.875rem;
+    }
+
+    .detail-card-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.6rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .detail-metric-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.6rem;
+    }
+
+    .metric-box {
+      background: var(--bg-tertiary);
+      padding: 0.5rem 0.6rem;
+      border-radius: 0.375rem;
+      border: 1px solid var(--border);
+    }
+
+    .metric-label {
+      font-size: 0.675rem;
+      color: var(--text-muted);
+      margin-bottom: 0.15rem;
+    }
+
+    .metric-value {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .arrivals-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.75rem;
+    }
+
+    .arrivals-table th, .arrivals-table td {
+      padding: 0.35rem 0.4rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .arrivals-table th {
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.65rem;
+    }
+
+    .telemetry-json {
+      background: var(--bg-tertiary);
+      padding: 0.6rem;
+      border-radius: 0.375rem;
+      font-family: monospace;
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      overflow-x: auto;
+      max-height: 180px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin: 0;
+    }
+
+    @keyframes slideInLeft {
+      from { transform: translateX(-30px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
     /* ─── Persistent Recommendation Task Stepper ─── */
     .pipeline-progress-panel {
       background: var(--bg-secondary);
@@ -1012,6 +1158,20 @@
         <div class="loading">
           <div class="spinner"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- Hub Details Extension Panel (Slides out next to Left Rail) -->
+    <div class="hub-detail-drawer" id="hub-detail-drawer">
+      <div class="drawer-header">
+        <div>
+          <div class="drawer-hub-name" id="drawer-hub-name">Selected Hub Overview</div>
+          <div class="drawer-hub-meta" id="drawer-hub-meta">Transit Hub Insights & Telemetry</div>
+        </div>
+        <button class="drawer-close" onclick="closeHubDetailDrawer()">×</button>
+      </div>
+      <div class="drawer-content" id="drawer-content">
+        <!-- Populated dynamically on hub card click -->
       </div>
     </div>
 
@@ -1230,13 +1390,49 @@
       state.driverCoords = { lat, lng };
     }
 
-    // ─── Route Polyline ───
-    function drawRouteToHub(hub) {
+    // ─── OSRM Real Road Route Polyline ───
+    async function drawRouteToHub(hub) {
       if (state.routeLine) {
         state.map.removeLayer(state.routeLine);
+        state.routeLine = null;
       }
-      if (!state.driverCoords) return;
+      if (!state.driverCoords || !hub || hub.lat == null || hub.lng == null) return;
 
+      const origin = `${state.driverCoords.lng},${state.driverCoords.lat}`;
+      const dest = `${hub.lng},${hub.lat}`;
+
+      try {
+        const resp = await fetch(`https://router.project-osrm.org/route/v1/driving/${origin};${dest}?overview=full&geometries=geojson`);
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.routes && data.routes.length > 0) {
+            const route = data.routes[0];
+            const coordinates = route.geometry.coordinates; // [lng, lat]
+            const latLngs = coordinates.map(c => [c[1], c[0]]);
+
+            state.routeLine = L.polyline(latLngs, {
+              color: '#22c55e',
+              weight: 5,
+              opacity: 0.85,
+              lineJoin: 'round'
+            }).addTo(state.map);
+
+            const distanceKm = (route.distance / 1000).toFixed(1);
+            const durationMin = Math.round(route.duration / 60);
+
+            state.routeLine.bindPopup(`
+              <strong>🚗 Road Route to ${hub.name}</strong><br>
+              Driving Distance: ${distanceKm} km<br>
+              Est. Travel Time: ${durationMin} mins
+            `);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('[Turas AI] OSRM routing failed, falling back to direct line:', e);
+      }
+
+      // Fallback straight dotted line if OSRM is unreachable
       state.routeLine = L.polyline([
         [state.driverCoords.lat, state.driverCoords.lng],
         [hub.lat, hub.lng]
@@ -1244,20 +1440,8 @@
         color: '#22c55e',
         weight: 4,
         opacity: 0.7,
-        dashArray: '10, 10'
+        dashArray: '8, 8'
       }).addTo(state.map);
-
-      const distance = calculateDistance(
-        state.driverCoords.lat, state.driverCoords.lng,
-        hub.lat, hub.lng
-      );
-      const duration = Math.round(distance * 2);
-
-      state.routeLine.bindPopup(`
-        <strong>Route to ${hub.name}</strong><br>
-        Distance: ${distance.toFixed(1)} km<br>
-        Est. time: ${duration} mins
-      `);
     }
 
     function calculateDistance(lat1, lng1, lat2, lng2) {
@@ -1448,12 +1632,12 @@
       });
     }
 
-    // ─── Hub Selection ───
+    // ─── Hub Selection & Extension Panel ───
     window.selectHub = function(hubId) {
       state.selectedHub = hubId;
       renderHubList(state.matrix);
 
-      const hub = state.matrix.hubs.find(h => h.hubId === hubId);
+      const hub = state.matrix?.hubs?.find(h => h.hubId === hubId);
       if (hub) {
         state.map.setView([hub.lat, hub.lng], 13);
         drawRouteToHub(hub);
@@ -1468,8 +1652,157 @@
             }, 1000);
           }
         }
+
+        renderHubDetailDrawer(hub);
       }
     };
+
+    window.closeHubDetailDrawer = function() {
+      const drawer = document.getElementById('hub-detail-drawer');
+      if (drawer) drawer.classList.remove('open');
+    };
+
+    function renderHubDetailDrawer(hub) {
+      const drawer = document.getElementById('hub-detail-drawer');
+      if (!drawer) return;
+
+      drawer.classList.add('open');
+
+      const isPreSearch = hub.pFare === null || hub.pFare === undefined;
+      const pFareDisplay = isPreSearch ? '--%' : `${hub.pFare}%`;
+      const badgeClass = isPreSearch ? 'pfare-pending' : hub.pFare >= 80 ? 'pfare-green' : hub.pFare >= 50 ? 'pfare-amber' : 'pfare-red';
+      const hubType = (Array.isArray(hub.modes) && hub.modes.includes('flight')) ? 'Airport' : (Array.isArray(hub.modes) && hub.modes.includes('ferry')) ? 'Ferry Port' : 'Rail Station';
+
+      document.getElementById('drawer-hub-name').textContent = hub.name || 'Transit Hub Overview';
+      document.getElementById('drawer-hub-meta').textContent = `${hubType} · ${hub.region ? hub.region.toUpperCase() : 'IRELAND'} · ${hub.distanceKm ? hub.distanceKm + ' km away' : ''}`;
+
+      const arrivalsList = (hub.arrivals && hub.arrivals.length > 0) ? hub.arrivals : [];
+
+      const arrivalsRows = arrivalsList.map(a => `
+        <tr>
+          <td><span style="text-transform:capitalize;">${a.mode || 'transit'}</span></td>
+          <td><strong>${a.origin || a.flightNumber || 'Scheduled Arrival'}</strong></td>
+          <td>${a.etaMinutes != null ? a.etaMinutes + ' mins' : 'Arrived'}</td>
+          <td><span style="color:${a.simulated ? 'var(--text-muted)' : 'var(--green)'};">${a.source || 'live'}</span></td>
+        </tr>
+      `).join('');
+
+      const content = document.getElementById('drawer-content');
+      content.innerHTML = `
+        <!-- Overview & AI Demand Score Card -->
+        <div class="detail-card">
+          <div class="detail-card-title">
+            <span>Demand Probability (P_fare)</span>
+            <span class="pfare-badge ${badgeClass}" style="font-size:0.9rem;">${pFareDisplay}</span>
+          </div>
+          <div class="detail-metric-grid">
+            <div class="metric-box">
+              <div class="metric-label">Rank Position</div>
+              <div class="metric-value">${isPreSearch ? '--' : '#' + (hub.rank || 1)}</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Sat. Cluster</div>
+              <div class="metric-value" style="text-transform:capitalize;">${hub.cluster || 'Medium'}</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Est. Passengers (N_pax)</div>
+              <div class="metric-value">${isPreSearch ? '--' : (hub.nPax || 0)}</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Hub Capacity (k_hub)</div>
+              <div class="metric-value">${hub.kHub || 150}</div>
+            </div>
+          </div>
+          ${hub.rationale ? `<div style="margin-top:0.75rem;font-size:0.775rem;color:var(--text-secondary);background:var(--bg-tertiary);padding:0.5rem 0.75rem;border-radius:0.375rem;border-left:3px solid var(--green);"><strong>AI Rationale:</strong> ${hub.rationale}</div>` : ''}
+        </div>
+
+        <!-- Evaluation Multipliers Breakdown -->
+        <div class="detail-card">
+          <div class="detail-card-title">Evaluation Equation Parameters</div>
+          <div class="detail-metric-grid">
+            <div class="metric-box">
+              <div class="metric-label">Base Saturation (S_base)</div>
+              <div class="metric-value">${hub.sBase != null ? hub.sBase : '--'}</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Weather Factor (M_weather)</div>
+              <div class="metric-value">${hub.mWeather != null ? hub.mWeather : '1.0'}</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Disruption Factor (M_disrupt)</div>
+              <div class="metric-value">${hub.mDisrupt != null ? hub.mDisrupt : '1.0'}</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Supply Density (B_supply)</div>
+              <div class="metric-value">${hub.bSupply != null ? hub.bSupply : '1.0'}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Ingested Live Arrivals Stream -->
+        <div class="detail-card">
+          <div class="detail-card-title">
+            <span>Upcoming Arrivals (${arrivalsList.length})</span>
+          </div>
+          ${arrivalsList.length > 0 ? `
+            <table class="arrivals-table">
+              <thead>
+                <tr>
+                  <th>Mode</th>
+                  <th>Origin / ID</th>
+                  <th>ETA</th>
+                  <th>Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${arrivalsRows}
+              </tbody>
+            </table>
+          ` : '<div style="font-size:0.8rem;color:var(--text-muted);text-align:center;padding:0.5rem;">No active arrivals recorded for this hub window.</div>'}
+        </div>
+
+        <!-- Weather Telemetry -->
+        <div class="detail-card">
+          <div class="detail-card-title">Weather Telemetry (Met Éireann)</div>
+          <div class="detail-metric-grid">
+            <div class="metric-box">
+              <div class="metric-label">Temperature</div>
+              <div class="metric-value">${hub.weather?.tempC ?? 10}°C</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Precipitation</div>
+              <div class="metric-value">${hub.weather?.precipMmHr ?? 0} mm/hr</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Raw Analysis Payload Telemetry -->
+        <div class="detail-card">
+          <div class="detail-card-title">Raw Telemetry Payload</div>
+          <pre class="telemetry-json">${JSON.stringify({
+            hubId: hub.hubId,
+            name: hub.name,
+            coordinates: { lat: hub.lat, lng: hub.lng },
+            distanceKm: hub.distanceKm,
+            kHub: hub.kHub,
+            region: hub.region,
+            modes: hub.modes,
+            pFare: hub.pFare,
+            rank: hub.rank,
+            nPax: hub.nPax,
+            sBase: hub.sBase,
+            mWeather: hub.mWeather,
+            mDisrupt: hub.mDisrupt,
+            bSupply: hub.bSupply,
+            iRaw: hub.iRaw,
+            cluster: hub.cluster,
+            rationale: hub.rationale,
+            weather: hub.weather,
+            arrivalsCount: arrivalsList.length
+          }, null, 2)}</pre>
+        </div>
+      `;
+    }
 
     // ─── Persistent Progress Stepper Functions ───
     function resetProgressPanel() {

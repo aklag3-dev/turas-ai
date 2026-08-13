@@ -92,12 +92,34 @@ npm run secret:ors             # Set OpenRouteService API key (optional)
 ## Features
 
 - **Live P_fare Scores** — Colour-coded pins (green ≥80%, amber 50–79%, red <50%)
+- **Search Configuration Box** — Demo City, Primary Platform, and Search Radius (10–100 km)
+- **Persistent Stepper Panel** — Real-time 4-step task progress tracking on screen
+- **OSRM Road Route Navigation** — Real driving road geometry, distance, and travel time
+- **Hub Details Extension Panel** — Deep-dive overview, $P_{fare}$ parameters ($S_{base}, M_{weather}, M_{disrupt}, B_{supply}$), arrivals stream, weather telemetry & raw JSON
+- **Google Gemini 2.5 Flash Chatbot** — Intelligent AI assistant for hub rules and general out-of-domain questions
 - **Drive Mode** — High-contrast UI with TTS audio alerts for hands-free operation
-- **AI Chatbot** — Answers questions about scores, rank rules, transit policies
-- **Weather Forecast** — 6-hour hourly strip with temperature and precipitation
 - **Outcome Feedback** — Drivers log results to calibrate the prediction model
 - **Zero-PII** — Anonymous session IDs (AC-UUID), no personal data collected
 - **EU AI Act Compliant** — Article 50 transparency notice, explainable parameters
+
+---
+
+## Future Roadmap & Features
+
+1. **Recommendation Sharing (Social Dispatch)**
+   - Share live hub recommendations with other drivers or dispatchers via unique URL links, email, SMS/text message, or WhatsApp.
+   - One-click QR code export for instant mobile navigation.
+
+2. **User Accounts & Driver Profiles**
+   - Passwordless driver accounts (FIDO2 passkey / OAuth2).
+   - Saved custom radius defaults, favorite hub watchlists, and preferred platform settings.
+   - Personal shift yield analytics and $P_{fare}$ prediction accuracy tracking.
+
+3. **Multi-Vehicle Powertrain Integration**
+   - EV-specific hub recommendations with live ESB eCars charging station availability.
+
+4. **Time-Series Surge Heatmaps**
+   - Predictive demand heatmaps forecasting passenger arrival surges 2–4 hours in advance.
 
 ---
 
