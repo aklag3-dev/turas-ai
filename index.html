@@ -219,13 +219,14 @@
       transition: all 0.2s;
     }
     
-    .search-btn:disabled {
-      background: var(--text-muted);
+    .search-btn:disabled, .search-btn.searched {
+      background: var(--bg-tertiary, #475569) !important;
+      color: var(--text-muted, #94a3b8) !important;
       cursor: not-allowed;
       opacity: 0.6;
     }
     
-    .search-btn:not(:disabled):hover {
+    .search-btn:not(:disabled):not(.searched):hover {
       background: #16a34a;
     }
     
@@ -526,8 +527,8 @@
       position: fixed;
       bottom: 6rem;
       left: 1.5rem;
-      width: 320px;
-      max-height: 400px;
+      width: 350px;
+      max-height: 480px;
       background: var(--bg-secondary);
       border: 1px solid var(--border);
       border-radius: 0.75rem;
@@ -551,6 +552,41 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+    }
+
+    .gemini-badge {
+      font-size: 0.65rem;
+      background: rgba(59, 130, 246, 0.15);
+      color: #3b82f6;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      padding: 0.1rem 0.35rem;
+      border-radius: 0.25rem;
+      margin-left: 0.4rem;
+      font-weight: 500;
+    }
+
+    .chat-api-bar {
+      padding: 0.35rem 0.75rem;
+      background: var(--bg-primary);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .gemini-key-input {
+      flex: 1;
+      padding: 0.3rem 0.5rem;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 0.25rem;
+      color: var(--text-primary);
+      font-size: 0.75rem;
+    }
+
+    .gemini-key-input:focus {
+      outline: none;
+      border-color: #3b82f6;
     }
     
     .chat-close {
@@ -657,7 +693,7 @@
     <div class="header-center">
       <div class="dropdown-group" id="city-group">
         <span class="dropdown-label">Demo City</span>
-        <select id="city-select" class="city-select" onchange="onConfigChange()">
+        <select id="city-select" class="city-select" onchange="onCitySelectChange()">
           <option value="dublin">Dublin</option>
           <option value="cork">Cork</option>
           <option value="shannon">Shannon / Limerick</option>
@@ -733,15 +769,21 @@
   
   <div class="chat-panel" id="chat-panel">
     <div class="chat-header">
-      <span>Turas AI Assistant</span>
+      <div>
+        <span>Turas AI Assistant</span>
+        <span class="gemini-badge" title="Powered by Google Gemini AI">Gemini AI</span>
+      </div>
       <button class="chat-close" onclick="toggleChat()">×</button>
     </div>
+    <div class="chat-api-bar">
+      <input type="password" id="gemini-key-input" class="gemini-key-input" placeholder="Google AI Studio Gemini API Key (optional)..." onchange="saveGeminiKey()">
+    </div>
     <div class="chat-messages" id="chat-messages">
-      <div class="chat-message bot">Hello! I'm your Turas AI assistant. Ask me about scores, rank rules, or transit policies.</div>
+      <div class="chat-message bot">Hello! I'm your Turas AI assistant powered by Google Gemini. Ask me about hub scores, weather, rank rules, or ANY question outside transport!</div>
     </div>
     <div class="chat-input-container">
-      <input type="text" class="chat-input" id="chat-input" placeholder="Ask a question..." onkeypress="if(event.key==='Enter')sendMessage()">
-      <button class="chat-send" onclick="sendMessage()">Send</button>
+      <input type="text" class="chat-input" id="chat-input" placeholder="Ask anything..." onkeypress="if(event.key==='Enter')sendMessage()">
+      <button class="chat-send" id="chat-send-btn" onclick="sendMessage()">Send</button>
     </div>
   </div>
 
@@ -899,6 +941,14 @@
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors'
       }).addTo(state.map);
+
+      // In demo mode, clicking anywhere on the map sets the virtual driver location
+      state.map.on('click', function(e) {
+        if (state.locationMode === 'demo') {
+          updateDriverMarker(e.latlng.lat, e.latlng.lng);
+          window.onConfigChange();
+        }
+      });
     }
 
     // ─── Driver Marker ───
@@ -907,13 +957,20 @@
         state.driverMarker.setLatLng([lat, lng]);
       } else {
         state.driverMarker = L.marker([lat, lng], {
+          draggable: true,
           icon: L.divIcon({
             className: 'driver-marker-wrapper',
             html: '<div class="driver-marker"></div>',
             iconSize: [20, 20]
           })
         }).addTo(state.map);
-        state.driverMarker.bindPopup('Your location');
+        state.driverMarker.bindPopup('Your location (drag or click map to move)');
+
+        state.driverMarker.on('dragend', function(e) {
+          const pos = e.target.getLatLng();
+          updateDriverMarker(pos.lat, pos.lng);
+          window.onConfigChange();
+        });
       }
       state.driverCoords = { lat, lng };
     }
@@ -1155,10 +1212,22 @@
     };
 
     // ─── Search Control ───
+    window.onCitySelectChange = function() {
+      state.city = document.getElementById('city-select').value;
+      localStorage.setItem('turas_city', state.city);
+      if (state.locationMode === 'demo') {
+        state.map.setView(cityCoords[state.city], 11);
+        placeDemoDriver();
+      }
+      window.onConfigChange();
+    };
+
     window.onConfigChange = function() {
       state.configSaved = false;
-      document.getElementById('search-btn').disabled = false;
-      document.getElementById('search-btn').textContent = 'Begin Search';
+      const btn = document.getElementById('search-btn');
+      btn.disabled = false;
+      btn.classList.remove('searched');
+      btn.textContent = 'Begin Search';
     };
 
     window.beginSearch = async function() {
@@ -1174,19 +1243,20 @@
       state.searchPerformed = true;
       const btn = document.getElementById('search-btn');
       btn.disabled = true;
+      btn.classList.remove('searched');
       btn.textContent = 'Searching...';
       
-      // In demo mode, re-center map on selected city
-      if (state.locationMode === 'demo') {
-        state.map.setView(cityCoords[state.city], 11);
-        placeDemoDriver();
+      // Place initial driver if no coordinates exist yet in demo mode
+      if (state.locationMode === 'demo' && !state.driverCoords) {
+        await placeDemoDriver();
       }
       
       // Run the full pipeline to search for hubs with P_fare calculation
       await runPipeline();
       
-      btn.textContent = 'Begin Search';
-      btn.disabled = false;
+      btn.textContent = 'Searched';
+      btn.disabled = true;
+      btn.classList.add('searched');
     };
 
     // ─── Theme Toggle ───
@@ -1197,18 +1267,36 @@
       localStorage.setItem('turas_theme', newTheme);
     };
 
+    // ─── Gemini Key Management ───
+    window.saveGeminiKey = function() {
+      const val = document.getElementById('gemini-key-input').value.trim();
+      if (val) {
+        localStorage.setItem('turas_gemini_key', val);
+      } else {
+        localStorage.removeItem('turas_gemini_key');
+      }
+    };
+
     // ─── Chat Functions ───
     window.toggleChat = function() {
       const panel = document.getElementById('chat-panel');
       panel.classList.toggle('open');
+      const savedKey = localStorage.getItem('turas_gemini_key') || '';
+      const inputEl = document.getElementById('gemini-key-input');
+      if (savedKey && inputEl && !inputEl.value) {
+        inputEl.value = savedKey;
+      }
     };
 
-    window.sendMessage = function() {
+    const chatHistory = [];
+
+    window.sendMessage = async function() {
       const input = document.getElementById('chat-input');
       const message = input.value.trim();
       if (!message) return;
 
       const messagesContainer = document.getElementById('chat-messages');
+      const sendBtn = document.getElementById('chat-send-btn');
       
       // Add user message
       const userMsg = document.createElement('div');
@@ -1217,18 +1305,122 @@
       messagesContainer.appendChild(userMsg);
       
       input.value = '';
-      
-      // Generate bot response
-      setTimeout(() => {
-        const botMsg = document.createElement('div');
-        botMsg.className = 'chat-message bot';
-        botMsg.textContent = generateChatResponse(message);
-        messagesContainer.appendChild(botMsg);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-      }, 500);
-      
+      if (sendBtn) sendBtn.disabled = true;
+
+      // Add loading bot message
+      const botMsg = document.createElement('div');
+      botMsg.className = 'chat-message bot';
+      botMsg.textContent = 'Thinking...';
+      messagesContainer.appendChild(botMsg);
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+      const apiKey = localStorage.getItem('turas_gemini_key') || (document.getElementById('gemini-key-input')?.value || '').trim();
+
+      const context = {
+        locationMode: state.locationMode,
+        city: state.city,
+        driverCoords: state.driverCoords,
+        platform: state.platform,
+        radiusKm: state.radiusKm,
+        topHub: state.matrix?.hubs?.[0] ? {
+          name: state.matrix.hubs[0].name,
+          pFare: state.matrix.hubs[0].pFare,
+          arrivalsCount: state.matrix.hubs[0].arrivals?.length,
+          cluster: state.matrix.hubs[0].cluster
+        } : null,
+        hubCount: state.matrix?.hubs?.length || 0,
+        weather: state.brief?.hubs?.[0]?.weather || null
+      };
+
+      try {
+        const responseText = await getAIResponse(message, context, apiKey, chatHistory);
+        botMsg.innerHTML = formatMarkdownResponse(responseText);
+        
+        chatHistory.push({ role: 'user', text: message });
+        chatHistory.push({ role: 'model', text: responseText });
+        if (chatHistory.length > 20) chatHistory.splice(0, 2);
+      } catch (err) {
+        console.error('Chat error:', err);
+        const fallback = generateChatResponse(message);
+        botMsg.textContent = fallback;
+      } finally {
+        if (sendBtn) sendBtn.disabled = false;
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      }
     };
+
+    function formatMarkdownResponse(text) {
+      if (!text) return '';
+      return text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\n/g, '<br>');
+    }
+
+    async function getAIResponse(message, context, apiKey, history) {
+      // 1. Try Worker proxy first (Worker uses env.GEMINI_API_KEY or user passed key)
+      try {
+        const resp = await fetch(`${WORKER_URL}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, context, apiKey, history })
+        });
+
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.response) {
+            return data.response;
+          }
+        }
+      } catch (e) {
+        console.warn('[Turas AI] Worker chat proxy call failed, attempting direct Gemini API:', e);
+      }
+
+      // 2. Direct call to Google AI Studio Gemini API if key is present
+      if (apiKey) {
+        try {
+          const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+          const systemPrompt = `You are Turas AI, an intelligent driver assistant for transport hubs in Ireland.
+You assist taxi and rideshare drivers in maximizing earnings, understanding hub recommendations (P_fare), weather, and transport rules.
+You are ALSO an AI assistant powered by Google Gemini, capable of answering ANY general question or topic outside transport (general knowledge, math, science, coding, advice, trivia, etc.).
+Keep responses concise, clear, and friendly.
+
+${context ? 'Current Live Dashboard Context:\n' + JSON.stringify(context) : ''}`;
+
+          const payload = {
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: `${systemPrompt}\n\nUser Question: ${message}` }]
+              }
+            ]
+          };
+
+          const directResp = await fetch(geminiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          if (directResp.ok) {
+            const data = await directResp.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) return text;
+          }
+        } catch (e) {
+          console.error('[Turas AI] Direct Gemini API call failed:', e);
+        }
+      }
+
+      // 3. Fallback to local rule-based answer
+      const localAnswer = generateChatResponse(message);
+      if (!apiKey) {
+        return localAnswer + '<br><br>💡 <em>Tip: Add a Google AI Studio Gemini API key in the chat header above to process any question with Gemini AI!</em>';
+      }
+      return localAnswer;
+    }
 
     function generateChatResponse(question) {
       const q = question.toLowerCase();
@@ -1390,6 +1582,12 @@
     // Run initial discovery after a short delay to ensure map is ready
     setTimeout(initialDiscovery, 500);
     
+    // Restore saved Gemini Key if available
+    const savedGeminiKey = localStorage.getItem('turas_gemini_key') || '';
+    if (savedGeminiKey && document.getElementById('gemini-key-input')) {
+      document.getElementById('gemini-key-input').value = savedGeminiKey;
+    }
+
     // Enable the search button
     document.getElementById('search-btn').disabled = false;
     document.getElementById('search-btn').textContent = 'Begin Search';

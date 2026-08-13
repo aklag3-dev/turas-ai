@@ -38,6 +38,9 @@ export default {
       if (path === '/api/hubs') {
         return await handleHubs(request, corsHeaders);
       }
+      if (path === '/api/chat') {
+        return await handleChat(request, env, corsHeaders);
+      }
       if (path === '/api/health') {
         return Response.json({ status: 'ok', version: env.WORKER_VERSION }, { headers: corsHeaders });
       }
@@ -470,4 +473,81 @@ function getRegionForLocation(lat, lng) {
   if (lat > 51.8 && lat < 52.0 && lng > -8.6 && lng < -8.3) return 'cork';
   if (lat > 52.5 && lat < 52.8 && lng > -9.1 && lng < -8.7) return 'shannon';
   return 'other';
+}
+
+async function handleChat(request, env, corsHeaders) {
+  if (request.method !== 'POST') {
+    return Response.json({ error: 'Method not allowed' }, { status: 405, headers: corsHeaders });
+  }
+
+  try {
+    const body = await request.json().catch(() => ({}));
+    const { message, context, apiKey: userApiKey, history = [] } = body;
+    const apiKey = userApiKey || env.GEMINI_API_KEY;
+
+    if (!message) {
+      return Response.json({ error: 'Message parameter is required' }, { status: 400, headers: corsHeaders });
+    }
+
+    if (!apiKey) {
+      return Response.json({
+        error: 'Gemini API key not configured',
+        simulated: true,
+        response: null
+      }, { status: 400, headers: corsHeaders });
+    }
+
+    const systemPrompt = `You are Turas AI, an intelligent driver assistant for transport hubs (airports, ferry ports, rail stations) in Ireland.
+You assist taxi and rideshare drivers in maximizing earnings, understanding hub recommendations, weather, demand patterns (P_fare), and transport rules.
+You are ALSO an AI assistant powered by Google Gemini, capable of answering ANY general question, topic, advice, math, trivia, coding, or conversation outside transport hubs.
+Keep responses concise, clear, helpful, and friendly.
+
+${context ? 'Current Live Dashboard Context:\n' + JSON.stringify(context, null, 2) : ''}`;
+
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+    const contents = [];
+    contents.push({
+      role: 'user',
+      parts: [{ text: systemPrompt }]
+    });
+    contents.push({
+      role: 'model',
+      parts: [{ text: 'Understood. I am Turas AI, ready to assist with driver recommendations and answer any questions.' }]
+    });
+
+    if (Array.isArray(history)) {
+      for (const h of history) {
+        if (h.role && h.text) {
+          contents.push({
+            role: h.role === 'user' ? 'user' : 'model',
+            parts: [{ text: h.text }]
+          });
+        }
+      }
+    }
+
+    contents.push({
+      role: 'user',
+      parts: [{ text: message }]
+    });
+
+    const resp = await fetch(geminiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents })
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      return Response.json({ error: `Gemini API error ${resp.status}`, details: errText }, { status: resp.status, headers: corsHeaders });
+    }
+
+    const data = await resp.json();
+    const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated.';
+
+    return Response.json({ response: replyText, model: 'gemini-2.5-flash' }, { headers: corsHeaders });
+  } catch (err) {
+    return Response.json({ error: err.message }, { status: 500, headers: corsHeaders });
+  }
 }
