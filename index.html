@@ -63,7 +63,7 @@
     }
     
     .logo {
-      height: 32px;
+      height: 64px;
       width: auto;
     }
     
@@ -203,8 +203,63 @@
       display: none;
     }
     
-    .dropdown-group.hidden {
-      display: none;
+    /* ─── Search Configuration Box (Left Rail) ─── */
+    .config-box {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 0.875rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 4px 12px var(--shadow);
+    }
+
+    .config-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .config-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .config-grid .dropdown-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      width: 100%;
+    }
+
+    .config-grid .dropdown-label {
+      font-size: 0.725rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .config-grid select {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 0.375rem;
+      color: var(--text-primary);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .config-grid .search-btn {
+      width: 100%;
+      padding: 0.65rem 1rem;
+      margin-top: 0.25rem;
+      font-size: 0.875rem;
     }
     
     .search-btn {
@@ -863,45 +918,6 @@
     <div class="header-left">
       <img src="img/logo.png" alt="Turas AI" class="logo">
     </div>
-    <div class="header-center">
-      <div class="dropdown-group" id="city-group">
-        <span class="dropdown-label">Demo City</span>
-        <select id="city-select" class="city-select" onchange="onCitySelectChange()">
-          <option value="dublin">Dublin</option>
-          <option value="cork">Cork</option>
-          <option value="shannon">Shannon / Limerick</option>
-        </select>
-      </div>
-      <div class="dropdown-group">
-        <span class="dropdown-label">Primary Platform</span>
-        <select id="platform-select" class="platform-select" onchange="onConfigChange()">
-          <option value="freenow">FreeNow (Taxi)</option>
-          <option value="independent">Independent Taxi</option>
-          <option value="uber">Uber</option>
-          <option value="bolt">Bolt</option>
-        </select>
-      </div>
-      <div class="dropdown-group">
-        <span class="dropdown-label">Search Radius</span>
-        <select id="radius-select" class="radius-select" onchange="onConfigChange()">
-          <option value="10">10 km</option>
-          <option value="15">15 km</option>
-          <option value="20">20 km</option>
-          <option value="25" selected>25 km</option>
-          <option value="30">30 km</option>
-          <option value="35">35 km</option>
-          <option value="40">40 km</option>
-          <option value="45">45 km</option>
-          <option value="50">50 km</option>
-          <option value="60">60 km</option>
-          <option value="70">70 km</option>
-          <option value="80">80 km</option>
-          <option value="90">90 km</option>
-          <option value="100">100 km</option>
-        </select>
-      </div>
-      <button class="search-btn" id="search-btn" onclick="beginSearch()">Begin Search</button>
-    </div>
     <div class="header-right">
       <button class="location-btn" id="gps-btn" onclick="requestGPS()">📍 Allow GPS</button>
       <div class="status-led" id="status-led">
@@ -927,6 +943,51 @@
 
   <div class="container" id="app">
     <div class="left-rail">
+      <!-- Search Configuration Box -->
+      <div class="config-box" id="config-box">
+        <div class="config-title">Search Configuration</div>
+        <div class="config-grid">
+          <div class="dropdown-group" id="city-group">
+            <span class="dropdown-label">Demo City</span>
+            <select id="city-select" class="city-select" onchange="onCitySelectChange()">
+              <option value="dublin">Dublin</option>
+              <option value="cork">Cork</option>
+              <option value="shannon">Shannon / Limerick</option>
+            </select>
+          </div>
+          <div class="dropdown-group">
+            <span class="dropdown-label">Primary Platform</span>
+            <select id="platform-select" class="platform-select" onchange="onConfigChange()">
+              <option value="freenow">FreeNow (Taxi)</option>
+              <option value="independent">Independent Taxi</option>
+              <option value="uber">Uber</option>
+              <option value="bolt">Bolt</option>
+            </select>
+          </div>
+          <div class="dropdown-group">
+            <span class="dropdown-label">Search Radius</span>
+            <select id="radius-select" class="radius-select" onchange="onConfigChange()">
+              <option value="10">10 km</option>
+              <option value="15">15 km</option>
+              <option value="20">20 km</option>
+              <option value="25" selected>25 km</option>
+              <option value="30">30 km</option>
+              <option value="35">35 km</option>
+              <option value="40">40 km</option>
+              <option value="45">45 km</option>
+              <option value="50">50 km</option>
+              <option value="60">60 km</option>
+              <option value="70">70 km</option>
+              <option value="80">80 km</option>
+              <option value="90">90 km</option>
+              <option value="100">100 km</option>
+            </select>
+          </div>
+          <button class="search-btn" id="search-btn" onclick="beginSearch()">Begin Search</button>
+        </div>
+      </div>
+
+      <!-- Recommendation Task Status Panel -->
       <div id="pipeline-progress-panel" class="pipeline-progress-panel">
         <div class="progress-header">
           <div class="progress-title">

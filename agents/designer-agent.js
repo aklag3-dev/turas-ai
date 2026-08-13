@@ -91,29 +91,42 @@ export class TurasDesigner {
     const results = [];
 
     for (const hub of hubs) {
-      const nPax = computeNPax(hub.arrivals);
-      const sBase = computeSBase(nPax, hub.kHub);
-      const mWeather = computeMWeather(hub.weather.precipMmHr, hub.weather.tempC);
-      const mDisrupt = computeMDisrupt(hub.disruptions);
+      const arrivals = Array.isArray(hub.arrivals) ? hub.arrivals : [];
+      const weather = hub.weather || { precipMmHr: 0, tempC: 10 };
+      const precip = weather.precipMmHr != null ? weather.precipMmHr : 0;
+      const temp = weather.tempC != null ? weather.tempC : 10;
+      const disruptions = Array.isArray(hub.disruptions) ? hub.disruptions : [];
+
+      const nPax = computeNPax(arrivals);
+      const kHub = hub.kHub || 150;
+      const sBase = computeSBase(nPax, kHub);
+      const mWeather = computeMWeather(precip, temp);
+      const mDisrupt = computeMDisrupt(disruptions);
       const bSupply = computeBSupply(hour, platform);
       const pFare = computePFare(sBase, mWeather, mDisrupt, bSupply);
       const iRaw = (sBase * mWeather * mDisrupt) / bSupply;
 
       const result = {
-        hubId: hub.hubId, name: hub.name, lat: hub.lat, lng: hub.lng, kHub: hub.kHub,
+        hubId: hub.hubId,
+        name: hub.name || 'Transit Hub',
+        lat: hub.lat,
+        lng: hub.lng,
+        kHub,
         region: hub.region || null,
         modes: hub.modes || [],
         distanceKm: hub.distanceKm || null,
-        nPax: Math.round(nPax), sBase: Math.round(sBase * 10) / 10,
+        nPax: Math.round(nPax),
+        sBase: Math.round(sBase * 10) / 10,
         mWeather: Math.round(mWeather * 1000) / 1000,
         mDisrupt: Math.round(mDisrupt * 1000) / 1000,
         bSupply: Math.round(bSupply * 1000) / 1000,
         iRaw: Math.round(iRaw * 10) / 10,
-        pFare, pinColor: pinColor(pFare),
-        cluster: cluster(nPax, hub.kHub),
-        arrivals: hub.arrivals,
-        weather: hub.weather,
-        disruptions: hub.disruptions
+        pFare,
+        pinColor: pinColor(pFare),
+        cluster: cluster(nPax, kHub),
+        arrivals,
+        weather,
+        disruptions
       };
       result.rationale = buildRationale(result);
       results.push(result);

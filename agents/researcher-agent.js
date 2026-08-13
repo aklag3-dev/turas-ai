@@ -85,8 +85,9 @@ function generateSimulatedWeather(rand) {
 function generateSimulatedArrivals(hub, windowMinutes, rand) {
   const arrivals = [];
   const count = Math.floor(rand() * 6) + 2;
+  const modes = (hub && Array.isArray(hub.modes) && hub.modes.length > 0) ? hub.modes : ['train'];
   for (let i = 0; i < count; i++) {
-    const mode = hub.modes[Math.floor(rand() * hub.modes.length)];
+    const mode = modes[Math.floor(rand() * modes.length)];
     const etaMinutes = Math.floor(rand() * windowMinutes * 2);
     let origin = 'Unknown';
     if (mode === 'flight') origin = rand() > 0.5 ? 'London' : 'Amsterdam';
