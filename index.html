@@ -1681,6 +1681,9 @@
             iconSize: [24, 24]
           })
         }).addTo(state.map);
+        marker.on('click', () => { marker.closePopup(); selectHub(hub.hubId); });
+        marker.on('mouseover', () => marker.openPopup());
+        marker.on('mouseout', () => marker.closePopup());
 
         const distStr = hub.distanceKm != null ? `<br>Distance: ${hub.distanceKm} km` : '';
         const pFareStr = (hub.pFare === null || hub.pFare === undefined) ? 'P_fare: --% (click Begin Search)' : `P_fare: ${hub.pFare}%`;
