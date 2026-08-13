@@ -35,6 +35,9 @@ export default {
       if (path === '/api/route') {
         return await handleRoute(request, env, corsHeaders);
       }
+      if (path === '/api/hubs') {
+        return await handleHubs(request, corsHeaders);
+      }
       if (path === '/api/health') {
         return Response.json({ status: 'ok', version: env.WORKER_VERSION }, { headers: corsHeaders });
       }
@@ -354,4 +357,117 @@ function generateSimulatedRoute(startLat, startLon, endLat, endLon) {
     duration: Math.round(duration),
     distance: Math.round(dist * 1000)
   };
+}
+
+async function handleHubs(request, corsHeaders) {
+  const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1SM1HlDJCCxJiXu8-kUR8UEbB55kXP-bCqApxiqePXOs/export?format=csv&gid=0&sheet=Transit_Hubs';
+  
+  try {
+    const resp = await fetch(SHEET_URL);
+    if (!resp.ok) {
+      throw new Error(`Failed to fetch sheet: ${resp.status}`);
+    }
+    
+    const csv = await resp.text();
+    const hubs = parseHubCSV(csv);
+    
+    return Response.json({
+      hubs,
+      count: hubs.length,
+      source: 'google-sheets',
+      timestamp: new Date().toISOString()
+    }, { headers: corsHeaders });
+  } catch (e) {
+    console.error('Hubs fetch error:', e);
+    return Response.json({
+      hubs: [],
+      count: 0,
+      error: e.message,
+      source: 'error'
+    }, { headers: corsHeaders });
+  }
+}
+
+function parseHubCSV(csv) {
+  const lines = csv.trim().split('\n');
+  if (lines.length < 2) return [];
+  
+  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+  const hubs = [];
+  
+  for (let i = 1; i < lines.length; i++) {
+    const values = parseCSVLine(lines[i]);
+    if (values.length < headers.length) continue;
+    
+    const row = {};
+    headers.forEach((header, idx) => {
+      row[header] = values[idx]?.trim() || '';
+    });
+    
+    const hub = {
+      hubId: row['Location ID'] || `hub-${i}`,
+      name: row['Name'] || 'Unknown Hub',
+      lat: parseFloat(row['Latitude']) || 0,
+      lng: parseFloat(row['Longitude']) || 0,
+      kHub: getKHubForType(row['Transit Type']),
+      modes: getModesForType(row['Transit Type']),
+      region: getRegionForLocation(parseFloat(row['Latitude']), parseFloat(row['Longitude'])),
+      address: row['Address'] || '',
+      countryCode: row['Country Code'] || 'IE',
+      postalCode: row['Postal Code'] || '',
+    };
+    
+    if (hub.lat !== 0 && hub.lng !== 0) {
+      hubs.push(hub);
+    }
+  }
+  
+  return hubs;
+}
+
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  
+  result.push(current);
+  return result;
+}
+
+function getKHubForType(transitType) {
+  const type = transitType?.toLowerCase() || '';
+  if (type.includes('airport')) return 300;
+  if (type.includes('train') || type.includes('rail')) return 200;
+  if (type.includes('ferry') || type.includes('port')) return 150;
+  if (type.includes('bus')) return 100;
+  return 150;
+}
+
+function getModesForType(transitType) {
+  const type = transitType?.toLowerCase() || '';
+  if (type.includes('airport')) return ['flight'];
+  if (type.includes('train') || type.includes('rail')) return ['train'];
+  if (type.includes('ferry') || type.includes('port')) return ['ferry'];
+  if (type.includes('bus')) return ['bus'];
+  return ['train'];
+}
+
+function getRegionForLocation(lat, lng) {
+  if (lat > 53.2 && lat < 53.5 && lng > -6.5 && lng < -6.0) return 'dublin';
+  if (lat > 51.8 && lat < 52.0 && lng > -8.6 && lng < -8.3) return 'cork';
+  if (lat > 52.5 && lat < 52.8 && lng > -9.1 && lng < -8.7) return 'shannon';
+  return 'other';
 }

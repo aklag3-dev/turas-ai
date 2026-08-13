@@ -1,12 +1,11 @@
 // Turas AI — Resident Researcher Agent
 // ES-module: exports TurasResearcher class
 // Uses Cloudflare Worker proxy for live API calls with simulated fallback
-// Radius-based hub discovery: fetches hubs from Google Sheets on session start
+// Radius-based hub discovery: fetches hubs from Worker API on session start
 
 const WORKER_URL = 'https://turas-ai-proxy.symphony-driver-assist.workers.dev';
-const HUBS_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1SM1HlDJCCxJiXu8-kUR8UEbB55kXP-bCqApxiqePXOs/export?format=csv&gid=0&sheet=Transit_Hubs';
 
-// ─── Hubs cache (loaded from Google Sheets) ───
+// ─── Hubs cache (loaded from Worker API) ───
 let ALL_HUBS = [];
 let hubsLoaded = false;
 let hubsLoadPromise = null;
@@ -22,120 +21,6 @@ function haversineKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// ─── Parse CSV from Google Sheets ───
-function parseCSV(csv) {
-  const lines = csv.trim().split('\n');
-  const headers = lines[0].split(',').map(h => h.trim());
-  const hubs = [];
-  
-  for (let i = 1; i < lines.length; i++) {
-    const values = parseCSVLine(lines[i]);
-    if (values.length < headers.length) continue;
-    
-    const row = {};
-    headers.forEach((header, idx) => {
-      row[header] = values[idx]?.trim() || '';
-    });
-    
-    // Convert to hub format
-    const hub = {
-      hubId: row['Location ID'] || `hub-${i}`,
-      name: row['Name'] || 'Unknown Hub',
-      lat: parseFloat(row['Latitude']) || 0,
-      lng: parseFloat(row['Longitude']) || 0,
-      kHub: getKHubForType(row['Transit Type']),
-      modes: getModesForType(row['Transit Type']),
-      region: getRegionForLocation(parseFloat(row['Latitude']), parseFloat(row['Longitude'])),
-      address: row['Address'] || '',
-      countryCode: row['Country Code'] || 'IE',
-      postalCode: row['Postal Code'] || '',
-    };
-    
-    if (hub.lat !== 0 && hub.lng !== 0) {
-      hubs.push(hub);
-    }
-  }
-  
-  return hubs;
-}
-
-// ─── Parse CSV line handling quoted fields ───
-function parseCSVLine(line) {
-  const result = [];
-  let current = '';
-  let inQuotes = false;
-  
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    
-    if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (char === ',' && !inQuotes) {
-      result.push(current);
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  
-  result.push(current);
-  return result;
-}
-
-// ─── Get K_hub based on transit type ───
-function getKHubForType(transitType) {
-  const type = transitType?.toLowerCase() || '';
-  if (type.includes('airport')) return 300; // Average airport
-  if (type.includes('train') || type.includes('rail')) return 200;
-  if (type.includes('ferry') || type.includes('port')) return 150;
-  if (type.includes('bus')) return 100;
-  return 150; // Default
-}
-
-// ─── Get modes based on transit type ───
-function getModesForType(transitType) {
-  const type = transitType?.toLowerCase() || '';
-  if (type.includes('airport')) return ['flight'];
-  if (type.includes('train') || type.includes('rail')) return ['train'];
-  if (type.includes('ferry') || type.includes('port')) return ['ferry'];
-  if (type.includes('bus')) return ['bus'];
-  return ['train']; // Default
-}
-
-// ─── Get region based on coordinates ───
-function getRegionForLocation(lat, lng) {
-  if (lat > 53.2 && lat < 53.5 && lng > -6.5 && lng < -6.0) return 'dublin';
-  if (lat > 51.8 && lat < 52.0 && lng > -8.6 && lng < -8.3) return 'cork';
-  if (lat > 52.5 && lat < 52.8 && lng > -9.1 && lng < -8.7) return 'shannon';
-  return 'other';
-}
-
-// ─── Load hubs from Google Sheets ───
-async function loadHubsFromSheet() {
-  if (hubsLoaded) return ALL_HUBS;
-  if (hubsLoadPromise) return hubsLoadPromise;
-  
-  hubsLoadPromise = (async () => {
-    try {
-      const resp = await fetch(HUBS_SHEET_URL);
-      if (!resp.ok) throw new Error(`Failed to fetch hubs: ${resp.status}`);
-      
-      const csv = await resp.text();
-      ALL_HUBS = parseCSV(csv);
-      hubsLoaded = true;
-      
-      console.log(`[Turas AI] Loaded ${ALL_HUBS.length} hubs from Google Sheets`);
-      return ALL_HUBS;
-    } catch (err) {
-      console.error('[Turas AI] Failed to load hubs from sheet:', err);
-      // Fallback to empty list
-      return [];
-    }
-  })();
-  
-  return hubsLoadPromise;
-}
-
 // ─── Find hubs within radius ───
 function findHubsInRadius(driverLat, driverLng, radiusKm) {
   return ALL_HUBS
@@ -145,6 +30,31 @@ function findHubsInRadius(driverLat, driverLng, radiusKm) {
     }))
     .filter(hub => hub.distanceKm <= radiusKm)
     .sort((a, b) => a.distanceKm - b.distanceKm);
+}
+
+// ─── Load hubs from Worker API ───
+async function loadHubsFromAPI() {
+  if (hubsLoaded) return ALL_HUBS;
+  if (hubsLoadPromise) return hubsLoadPromise;
+  
+  hubsLoadPromise = (async () => {
+    try {
+      const resp = await fetch(`${WORKER_URL}/api/hubs`);
+      if (!resp.ok) throw new Error(`Failed to fetch hubs: ${resp.status}`);
+      
+      const data = await resp.json();
+      ALL_HUBS = data.hubs || [];
+      hubsLoaded = true;
+      
+      console.log(`[Turas AI] Loaded ${ALL_HUBS.length} hubs from Worker API`);
+      return ALL_HUBS;
+    } catch (err) {
+      console.error('[Turas AI] Failed to load hubs from API:', err);
+      return [];
+    }
+  })();
+  
+  return hubsLoadPromise;
 }
 
 function seededRandom(seed) {
@@ -298,9 +208,65 @@ export class TurasResearcher {
     this.allHubs = ALL_HUBS;
   }
 
+  // Quick discovery: hubs + weather only (no arrivals data)
+  // Used on page load to show hub list before "Begin Search"
+  async discoverHubs(config) {
+    await loadHubsFromAPI();
+    
+    const {
+      driverCoords = null,
+      radiusKm = 25,
+      sessionId
+    } = config;
+
+    const generatedAt = new Date().toISOString();
+    const hubData = [];
+
+    const originLat = driverCoords?.lat || 53.3498;
+    const originLng = driverCoords?.lng || -6.2603;
+
+    const hubsInRange = findHubsInRadius(originLat, originLng, radiusKm);
+
+    // Fetch weather for driver's location
+    const weatherResp = await fetchFromWorker('/api/weather', {
+      lat: originLat,
+      lon: originLng
+    });
+    const weather = processWeatherData(weatherResp);
+
+    for (const hub of hubsInRange) {
+      const rand = seededRandom(`${hub.hubId}-${generatedAt.slice(0, 13)}`);
+      const hubWeather = weather || generateSimulatedWeather(rand);
+
+      hubData.push({
+        hubId: hub.hubId,
+        name: hub.name,
+        lat: hub.lat,
+        lng: hub.lng,
+        kHub: hub.kHub,
+        region: hub.region,
+        distanceKm: hub.distanceKm,
+        arrivals: [],  // No arrivals yet — shown as "--%"
+        weather: hubWeather,
+        disruptions: [],
+        preSearch: true  // Flag for dashboard to show "--%"
+      });
+    }
+
+    return {
+      generatedAt,
+      sessionId: sessionId || crypto.randomUUID(),
+      driverCoords: { lat: originLat, lng: originLng },
+      radiusKm,
+      hubs: hubData,
+      preSearch: true
+    };
+  }
+
+  // Full pipeline: hubs + weather + arrivals + P_fare calculation
+  // Triggered by "Begin Search" button
   async collect(config) {
-    // Ensure hubs are loaded from Google Sheets
-    await loadHubsFromSheet();
+    await loadHubsFromAPI();
     
     const {
       driverCoords = null,

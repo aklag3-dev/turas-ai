@@ -89,6 +89,12 @@
       box-shadow: 0 0 8px var(--red);
     }
     
+    .status-led.loading {
+      background: var(--amber);
+      box-shadow: 0 0 8px var(--amber);
+      animation: pulse-led 0.5s infinite;
+    }
+    
     .status-tooltip {
       position: absolute;
       top: 100%;
@@ -342,6 +348,7 @@
     .pfare-green { background: var(--green); color: white; }
     .pfare-amber { background: var(--amber); color: white; }
     .pfare-red { background: var(--red); color: white; }
+    .pfare-pending { background: var(--text-muted); color: white; }
     
     .hub-stats {
       display: flex;
@@ -759,7 +766,8 @@
       driverCoords: null,
       locationMode: 'demo',
       systemStatus: 'live',
-      configSaved: true
+      configSaved: true,
+      searchPerformed: false
     };
 
     const cityCoords = {
@@ -1021,9 +1029,15 @@
       }
       
       container.innerHTML = matrix.hubs.map(hub => {
-        const colorClass = hub.pFare >= 80 ? 'pfare-green' : hub.pFare >= 50 ? 'pfare-amber' : 'pfare-red';
+        // Handle pre-search mode (pFare is null)
+        const isPreSearch = hub.pFare === null || hub.pFare === undefined;
+        const colorClass = isPreSearch ? 'pfare-pending' : 
+                          hub.pFare >= 80 ? 'pfare-green' : 
+                          hub.pFare >= 50 ? 'pfare-amber' : 'pfare-red';
         const selected = state.selectedHub === hub.hubId ? 'selected' : '';
-        const barColor = hub.pFare >= 80 ? 'var(--green)' : hub.pFare >= 50 ? 'var(--amber)' : 'var(--red)';
+        const barColor = isPreSearch ? 'var(--text-muted)' :
+                        hub.pFare >= 80 ? 'var(--green)' : 
+                        hub.pFare >= 50 ? 'var(--amber)' : 'var(--red)';
         
         // Use region field for hub type, fallback to hubId parsing
         let hubType;
@@ -1043,6 +1057,13 @@
         const weatherIcon = weather.precipMmHr > 5 ? '🌧️' : weather.precipMmHr > 2 ? '🌦️' : weather.tempC <= 3 ? '❄️' : '☀️';
         const distanceStr = hub.distanceKm != null ? `${hub.distanceKm} km` : '';
         
+        // Pre-search: show "--%" and hide arrivals/nPax/rank
+        const pFareDisplay = isPreSearch ? '--%' : `${hub.pFare}%`;
+        const arrivalsDisplay = isPreSearch ? '--' : hub.arrivals.length;
+        const nPaxDisplay = isPreSearch ? '--' : hub.nPax;
+        const rankDisplay = isPreSearch ? '--' : `#${hub.rank}`;
+        const scoreBarWidth = isPreSearch ? '0%' : `${hub.pFare}%`;
+        
         return `
           <div class="hub-card ${selected}" onclick="selectHub('${hub.hubId}')" data-hub-id="${hub.hubId}">
             <div class="hub-header">
@@ -1050,24 +1071,24 @@
                 <div class="hub-name">${hub.name}</div>
                 <div class="hub-type">${hubType}${distanceStr ? ' · ' + distanceStr : ''}</div>
               </div>
-              <div class="pfare-badge ${colorClass}">${hub.pFare}%</div>
+              <div class="pfare-badge ${colorClass}">${pFareDisplay}</div>
             </div>
             <div class="hub-stats">
               <div class="stat">
                 <span class="stat-label">Arrivals</span>
-                <span class="stat-value">${hub.arrivals.length}</span>
+                <span class="stat-value">${arrivalsDisplay}</span>
               </div>
               <div class="stat">
                 <span class="stat-label">N_pax</span>
-                <span class="stat-value">${hub.nPax}</span>
+                <span class="stat-value">${nPaxDisplay}</span>
               </div>
               <div class="stat">
                 <span class="stat-label">Rank</span>
-                <span class="stat-value">#${hub.rank}</span>
+                <span class="stat-value">${rankDisplay}</span>
               </div>
             </div>
             <div class="score-bar">
-              <div class="score-bar-fill" style="width: ${hub.pFare}%; background: ${barColor};"></div>
+              <div class="score-bar-fill" style="width: ${scoreBarWidth}; background: ${barColor};"></div>
             </div>
             <div class="weather-mini">
               <span class="weather-icon">${weatherIcon}</span>
@@ -1084,21 +1105,26 @@
       state.markers = {};
 
       matrix.hubs.forEach(hub => {
+        // Use grey for pre-search, otherwise use pFare color
+        const markerColor = (hub.pFare === null || hub.pFare === undefined) ? '#94a3b8' : hub.pinColor;
+        
         const marker = L.marker([hub.lat, hub.lng], {
           icon: L.divIcon({
             className: 'custom-marker',
-            html: `<div style="background: ${hub.pinColor}; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: transform 0.3s;"></div>`,
+            html: `<div style="background: ${markerColor}; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: transform 0.3s;"></div>`,
             iconSize: [24, 24]
           })
         }).addTo(state.map);
 
         const distStr = hub.distanceKm != null ? `<br>Distance: ${hub.distanceKm} km` : '';
+        const pFareStr = (hub.pFare === null || hub.pFare === undefined) ? 'P_fare: --% (click Begin Search)' : `P_fare: ${hub.pFare}%`;
+        
         marker.bindPopup(`
           <strong>${hub.name}</strong><br>
-          P_fare: ${hub.pFare}%<br>
-          Arrivals: ${hub.arrivals.length}<br>
-          Weather: ${hub.weather.precipMmHr}mm/hr, ${hub.weather.tempC}°C${distStr}<br>
-          ${hub.rationale}
+          ${pFareStr}<br>
+          Arrivals: ${hub.arrivals?.length || '--'}<br>
+          Weather: ${hub.weather.precipMmHr}mm/hr, ${hub.weather.tempC}°C${distStr}
+          ${hub.rationale ? '<br>' + hub.rationale : ''}
         `);
 
         state.markers[hub.hubId] = marker;
@@ -1145,6 +1171,7 @@
       localStorage.setItem('turas_radius', state.radiusKm.toString());
       
       state.configSaved = true;
+      state.searchPerformed = true;
       const btn = document.getElementById('search-btn');
       btn.disabled = true;
       btn.textContent = 'Searching...';
@@ -1155,10 +1182,11 @@
         placeDemoDriver();
       }
       
-      // Run the pipeline to search for hubs
+      // Run the full pipeline to search for hubs with P_fare calculation
       await runPipeline();
       
       btn.textContent = 'Begin Search';
+      btn.disabled = false;
     };
 
     // ─── Theme Toggle ───
@@ -1244,10 +1272,12 @@
     function updateStatusLED(status) {
       state.systemStatus = status;
       const led = document.getElementById('status-led');
+      led.classList.remove('error', 'loading');
+      
       if (status === 'error') {
         led.classList.add('error');
-      } else {
-        led.classList.remove('error');
+      } else if (status === 'loading') {
+        led.classList.add('loading');
       }
     }
 
@@ -1313,23 +1343,61 @@
       placeDemoDriver();
     }
     
-    // Show welcome message before search
-    document.getElementById('hub-list').innerHTML = `
-      <div style="text-align:center;padding:2rem;color:var(--text-muted);">
-        <div style="font-size:2rem;margin-bottom:1rem;">🔍</div>
-        <div style="font-weight:600;margin-bottom:0.5rem;color:var(--text-primary);">Ready to Search</div>
-        <div>Set your platform and search radius, then click <strong>"Begin Search"</strong> to find nearby transit hubs.</div>
-      </div>
-    `;
+    // Auto-discover hubs on page load (shows hubs with "--%" P_fare)
+    async function initialDiscovery() {
+      try {
+        updateStatusLED('loading');
+        const researcher = new TurasResearcher();
+        
+        // Get driver coords (demo or GPS)
+        let driverCoords = state.driverCoords;
+        if (!driverCoords && state.locationMode === 'demo') {
+          const coords = cityCoords[state.city] || cityCoords.dublin;
+          driverCoords = { lat: coords[0], lng: coords[1] };
+        }
+        
+        const brief = await researcher.discoverHubs({
+          driverCoords,
+          radiusKm: state.radiusKm,
+          sessionId: state.sessionId
+        });
+        
+        state.brief = brief;
+        state.matrix = { hubs: brief.hubs.map(h => ({ ...h, pFare: null })) };
+        
+        renderHubList(state.matrix);
+        renderMapMarkers(state.matrix);
+        
+        // Fit map to show all hubs and driver
+        const allPoints = [];
+        if (driverCoords) {
+          allPoints.push([driverCoords.lat, driverCoords.lng]);
+        }
+        brief.hubs.forEach(h => {
+          allPoints.push([h.lat, h.lng]);
+        });
+        if (allPoints.length > 0) {
+          state.map.fitBounds(allPoints, { padding: [50, 50], maxZoom: 13 });
+        }
+        
+        updateStatusLED('live');
+      } catch (err) {
+        console.error('[Turas AI] Discovery error:', err);
+        updateStatusLED('error');
+      }
+    }
     
-    // Enable the search button and wait for user to click "Begin Search"
+    // Run initial discovery after a short delay to ensure map is ready
+    setTimeout(initialDiscovery, 500);
+    
+    // Enable the search button
     document.getElementById('search-btn').disabled = false;
     document.getElementById('search-btn').textContent = 'Begin Search';
     
-    // Auto-refresh every 5 minutes after initial search
+    // Auto-refresh discovery every 5 minutes
     setInterval(() => {
-      if (state.matrix) {
-        runPipeline();
+      if (!state.searchPerformed) {
+        initialDiscovery();
       }
     }, 300000);
   </script>
