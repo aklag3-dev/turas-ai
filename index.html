@@ -1273,9 +1273,10 @@
     // ─── Hub List Rendering ───
     function renderHubList(matrix) {
       const container = document.getElementById('hub-list');
-      
-      if (matrix.hubs.length === 0) {
-        container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No hubs within your search radius. Try increasing the radius.</div>';
+      if (!container) return;
+
+      if (!matrix || !matrix.hubs || matrix.hubs.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No hubs within your search radius. Try increasing the search radius.</div>';
         return;
       }
       
@@ -1291,35 +1292,38 @@
                         hub.pFare >= 50 ? 'var(--amber)' : 'var(--red)';
         
         // Use region field for hub type, fallback to hubId parsing
-        let hubType;
-        if (hub.region && Array.isArray(hub.modes)) {
+        let hubType = 'Transit Hub';
+        if (Array.isArray(hub.modes) && hub.modes.length > 0) {
           hubType = hub.modes.includes('flight') ? 'Airport' 
                   : hub.modes.includes('ferry') ? 'Ferry Port'
                   : 'Rail Station';
-        } else {
-          hubType = hub.hubId.includes('airport') || hub.hubId.includes('ork') || hub.hubId.includes('snn') || hub.hubId.includes('dub-t') 
+        } else if (hub.hubId) {
+          const hid = hub.hubId.toLowerCase();
+          hubType = hid.includes('air') || hid.includes('ork') || hid.includes('snn') || hid.includes('dub') 
             ? 'Airport' 
-            : hub.hubId.includes('port') || hub.hubId.includes('ringaskiddy') || hub.hubId.includes('foynes')
+            : hid.includes('port') || hid.includes('ferry')
             ? 'Ferry Port'
             : 'Rail Station';
         }
         
-        const weather = hub.weather;
-        const weatherIcon = weather.precipMmHr > 5 ? '🌧️' : weather.precipMmHr > 2 ? '🌦️' : weather.tempC <= 3 ? '❄️' : '☀️';
+        const weather = hub.weather || { precipMmHr: 0, tempC: 10 };
+        const precip = weather.precipMmHr != null ? weather.precipMmHr : 0;
+        const temp = weather.tempC != null ? weather.tempC : 10;
+        const weatherIcon = precip > 5 ? '🌧️' : precip > 2 ? '🌦️' : temp <= 3 ? '❄️' : '☀️';
         const distanceStr = hub.distanceKm != null ? `${hub.distanceKm} km` : '';
         
         // Pre-search: show "--%" and hide arrivals/nPax/rank
         const pFareDisplay = isPreSearch ? '--%' : `${hub.pFare}%`;
-        const arrivalsDisplay = isPreSearch ? '--' : hub.arrivals.length;
-        const nPaxDisplay = isPreSearch ? '--' : hub.nPax;
-        const rankDisplay = isPreSearch ? '--' : `#${hub.rank}`;
+        const arrivalsDisplay = isPreSearch ? '--' : (hub.arrivals ? hub.arrivals.length : '--');
+        const nPaxDisplay = isPreSearch ? '--' : (hub.nPax != null ? hub.nPax : '--');
+        const rankDisplay = isPreSearch ? '--' : (hub.rank != null ? `#${hub.rank}` : '--');
         const scoreBarWidth = isPreSearch ? '0%' : `${hub.pFare}%`;
         
         return `
           <div class="hub-card ${selected}" onclick="selectHub('${hub.hubId}')" data-hub-id="${hub.hubId}">
             <div class="hub-header">
               <div>
-                <div class="hub-name">${hub.name}</div>
+                <div class="hub-name">${hub.name || 'Transit Hub'}</div>
                 <div class="hub-type">${hubType}${distanceStr ? ' · ' + distanceStr : ''}</div>
               </div>
               <div class="pfare-badge ${colorClass}">${pFareDisplay}</div>
@@ -1343,7 +1347,7 @@
             </div>
             <div class="weather-mini">
               <span class="weather-icon">${weatherIcon}</span>
-              <span>${weather.tempC}°C · ${weather.precipMmHr}mm/hr</span>
+              <span>${temp}°C · ${precip}mm/hr</span>
             </div>
           </div>
         `;
@@ -1370,11 +1374,12 @@
         const distStr = hub.distanceKm != null ? `<br>Distance: ${hub.distanceKm} km` : '';
         const pFareStr = (hub.pFare === null || hub.pFare === undefined) ? 'P_fare: --% (click Begin Search)' : `P_fare: ${hub.pFare}%`;
         
+        const weather = hub.weather || { precipMmHr: 0, tempC: 10 };
         marker.bindPopup(`
-          <strong>${hub.name}</strong><br>
+          <strong>${hub.name || 'Transit Hub'}</strong><br>
           ${pFareStr}<br>
-          Arrivals: ${hub.arrivals?.length || '--'}<br>
-          Weather: ${hub.weather.precipMmHr}mm/hr, ${hub.weather.tempC}°C${distStr}
+          Arrivals: ${hub.arrivals?.length ?? '--'}<br>
+          Weather: ${weather.precipMmHr ?? 0}mm/hr, ${weather.tempC ?? 10}°C${distStr}
           ${hub.rationale ? '<br>' + hub.rationale : ''}
         `);
 
