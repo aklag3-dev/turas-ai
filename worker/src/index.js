@@ -483,71 +483,109 @@ async function handleChat(request, env, corsHeaders) {
   try {
     const body = await request.json().catch(() => ({}));
     const { message, context, apiKey: userApiKey, history = [] } = body;
-    const apiKey = userApiKey || env.GEMINI_API_KEY || env.GEMINI_KEY;
+    const apiKey = userApiKey || request.headers.get('X-Gemini-Key') || env.GEMINI_API_KEY || env.GEMINI_KEY;
 
     if (!message) {
       return Response.json({ error: 'Message parameter is required' }, { status: 400, headers: corsHeaders });
     }
 
-    if (!apiKey) {
-      return Response.json({
-        error: 'Gemini API key not configured',
-        simulated: true,
-        response: null
-      }, { status: 400, headers: corsHeaders });
-    }
-
-    const systemPrompt = `You are Turas AI, an intelligent assistant powered by Google Gemini (gemini-2.5-flash).
+    const systemPrompt = `You are Turas AI, an intelligent driver assistant for transport hubs in Ireland, powered by AI.
 Your purpose:
 1. Help taxi and rideshare drivers in Ireland maximize earnings, navigate transport hubs (airports, ferry ports, rail stations), understand demand probabilities (P_fare), weather, and transport policies.
 2. Answer ALL questions—whether directly related to Turas AI, transport hubs, driving strategy, OR any general question/topic outside transport hubs (e.g. general knowledge, advice, math, science, coding, trivia, current events, directions, writing, etc.).
-3. Always provide clear, accurate, concise, and helpful responses using your full Gemini AI knowledge base.
+3. Always provide clear, accurate, concise, and helpful responses using your full AI knowledge base.
 
 ${context ? 'Current Live Dashboard Context:\n' + JSON.stringify(context, null, 2) : ''}`;
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    // 1. Try Gemini API first if API key is present
+    if (apiKey) {
+      try {
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
-    const contents = [];
-    contents.push({
-      role: 'user',
-      parts: [{ text: systemPrompt }]
-    });
-    contents.push({
-      role: 'model',
-      parts: [{ text: 'Understood. I am Turas AI, ready to assist with driver recommendations and answer any questions.' }]
-    });
+        const contents = [];
+        contents.push({
+          role: 'user',
+          parts: [{ text: systemPrompt }]
+        });
+        contents.push({
+          role: 'model',
+          parts: [{ text: 'Understood. I am Turas AI, ready to assist with driver recommendations and answer any questions.' }]
+        });
 
-    if (Array.isArray(history)) {
-      for (const h of history) {
-        if (h.role && h.text) {
-          contents.push({
-            role: h.role === 'user' ? 'user' : 'model',
-            parts: [{ text: h.text }]
-          });
+        if (Array.isArray(history)) {
+          for (const h of history) {
+            if (h.role && h.text) {
+              contents.push({
+                role: h.role === 'user' ? 'user' : 'model',
+                parts: [{ text: h.text }]
+              });
+            }
+          }
         }
+
+        contents.push({
+          role: 'user',
+          parts: [{ text: message }]
+        });
+
+        const resp = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents })
+        });
+
+        if (resp.ok) {
+          const data = await resp.json();
+          const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (replyText) {
+            return Response.json({ response: replyText, model: 'gemini-2.5-flash' }, { headers: corsHeaders });
+          }
+        }
+      } catch (geminiErr) {
+        console.error('[Turas AI Worker] Gemini API call error:', geminiErr);
       }
     }
 
-    contents.push({
-      role: 'user',
-      parts: [{ text: message }]
-    });
+    // 2. Try Workers AI if binding is available
+    if (env.AI) {
+      try {
+        const messages = [
+          { role: 'system', content: systemPrompt }
+        ];
 
-    const resp = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents })
-    });
+        if (Array.isArray(history)) {
+          for (const h of history) {
+            if (h.role && h.text) {
+              messages.push({
+                role: h.role === 'user' ? 'user' : 'assistant',
+                content: h.text
+              });
+            }
+          }
+        }
 
-    if (!resp.ok) {
-      const errText = await resp.text();
-      return Response.json({ error: `Gemini API error ${resp.status}`, details: errText }, { status: resp.status, headers: corsHeaders });
+        messages.push({ role: 'user', content: message });
+
+        const aiResult = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+          messages,
+          max_tokens: 500
+        });
+
+        const replyText = aiResult.response || aiResult.text;
+        if (replyText) {
+          return Response.json({ response: replyText, model: 'workers-ai-llama-3.1' }, { headers: corsHeaders });
+        }
+      } catch (aiErr) {
+        console.error('[Turas AI Worker] Workers AI error:', aiErr);
+      }
     }
 
-    const data = await resp.json();
-    const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated.';
+    // 3. Fallback error message if no AI service returned a response
+    return Response.json({
+      error: 'AI service unavailable',
+      response: 'I am Turas AI. Please ensure `GEMINI_API_KEY` is configured as a Cloudflare Worker secret or variable.'
+    }, { status: 500, headers: corsHeaders });
 
-    return Response.json({ response: replyText, model: 'gemini-2.5-flash' }, { headers: corsHeaders });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500, headers: corsHeaders });
   }

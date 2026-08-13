@@ -659,6 +659,90 @@
         font-size: 1.25rem;
       }
     }
+
+    /* ─── Processing Banner & Toast Notifications ─── */
+    .pfare-processing-banner {
+      position: absolute;
+      top: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-tertiary, #1e293b);
+      border: 1px solid #f59e0b;
+      color: var(--text-primary, #f8fafc);
+      padding: 0.6rem 1.2rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      z-index: 1000;
+      font-size: 0.85rem;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .processing-spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(245, 158, 11, 0.3);
+      border-top-color: #f59e0b;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .toast-container {
+      position: fixed;
+      top: 4.5rem;
+      right: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      z-index: 1005;
+      pointer-events: none;
+    }
+
+    .toast-notification {
+      pointer-events: auto;
+      background: var(--bg-secondary, #0f172a);
+      border: 1px solid #22c55e;
+      color: var(--text-primary, #f8fafc);
+      padding: 0.75rem 1.1rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.85rem;
+      animation: slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .toast-icon {
+      font-size: 1.1rem;
+    }
+
+    .toast-close {
+      background: none;
+      border: none;
+      color: var(--text-muted, #94a3b8);
+      cursor: pointer;
+      font-size: 1.25rem;
+      padding: 0;
+      margin-left: 0.5rem;
+      line-height: 1;
+    }
+
+    .toast-close:hover {
+      color: var(--text-primary, #f8fafc);
+    }
+
+    @keyframes slideInRight {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    @keyframes fadeOutRight {
+      from { transform: translateX(0); opacity: 1; }
+      to { transform: translateX(100%); opacity: 0; }
+    }
   </style>
 </head>
 <body>
@@ -1189,6 +1273,70 @@
       }
     };
 
+    // ─── Processing Banner & Toast Notifications ───
+    function showProcessingBanner(radiusKm) {
+      updateStatusLED('loading');
+      let banner = document.getElementById('pfare-processing-banner');
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'pfare-processing-banner';
+        banner.className = 'pfare-processing-banner';
+        const mapContainer = document.querySelector('.map-container') || document.body;
+        mapContainer.appendChild(banner);
+      }
+      banner.innerHTML = `
+        <div class="processing-spinner"></div>
+        <div>
+          <div style="font-weight:600;color:var(--text-primary);">Calculating P_fare Probabilities...</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);">Analyzing arrivals, weather & driver supply within ${radiusKm}km</div>
+        </div>
+      `;
+      banner.style.display = 'flex';
+    }
+
+    function hideProcessingBanner() {
+      const banner = document.getElementById('pfare-processing-banner');
+      if (banner) {
+        banner.style.display = 'none';
+      }
+    }
+
+    function showCompletionToast(matrix) {
+      updateStatusLED('live');
+      const topHub = matrix?.hubs?.[0];
+      const hubCount = matrix?.hubs?.length || 0;
+      
+      let toastContainer = document.getElementById('toast-container');
+      if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        toastContainer.className = 'toast-container';
+        document.body.appendChild(toastContainer);
+      }
+
+      const toast = document.createElement('div');
+      toast.className = 'toast-notification';
+      toast.innerHTML = `
+        <span class="toast-icon">✅</span>
+        <div style="flex:1;">
+          <div style="font-weight:600;color:var(--text-primary);">P_fare Calculation Complete!</div>
+          <div style="font-size:0.8rem;color:var(--text-secondary);">
+            ${topHub ? `Top Recommendation: <strong>${topHub.name} (${topHub.pFare}%)</strong>` : `Evaluated ${hubCount} hubs within range.`}
+          </div>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+      `;
+
+      toastContainer.appendChild(toast);
+
+      setTimeout(() => {
+        if (toast.parentElement) {
+          toast.style.animation = 'fadeOutRight 0.4s ease forwards';
+          setTimeout(() => toast.remove(), 400);
+        }
+      }, 5000);
+    }
+
     // ─── Search Control ───
     window.onCitySelectChange = function() {
       state.city = document.getElementById('city-select').value;
@@ -1223,6 +1371,9 @@
       btn.disabled = true;
       btn.classList.remove('searched');
       btn.textContent = 'Searching...';
+
+      // Visual processing indication
+      showProcessingBanner(state.radiusKm);
       
       // Place initial driver if no coordinates exist yet in demo mode
       if (state.locationMode === 'demo' && !state.driverCoords) {
@@ -1231,6 +1382,10 @@
       
       // Run the full pipeline to search for hubs with P_fare calculation
       await runPipeline();
+
+      // Hide banner and notify user task completed
+      hideProcessingBanner();
+      showCompletionToast(state.matrix);
       
       btn.textContent = 'Searched';
       btn.disabled = true;
@@ -1328,17 +1483,15 @@
           body: JSON.stringify({ message, context, history })
         });
 
-        if (resp.ok) {
-          const data = await resp.json();
-          if (data.response) {
-            return data.response;
-          }
+        const data = await resp.json().catch(() => ({}));
+        if (data && data.response) {
+          return data.response;
         }
       } catch (e) {
         console.warn('[Turas AI] Worker chat API call error:', e);
       }
 
-      // Fallback to local rule-based answer
+      // Fallback to local intelligent response generator
       return generateChatResponse(message);
     }
 
@@ -1346,38 +1499,43 @@
       const q = question.toLowerCase();
       
       if (q.includes('score') || q.includes('p_fare') || q.includes('probability')) {
-        const topHub = state.matrix?.hubs[0];
+        const topHub = state.matrix?.hubs?.[0];
         if (topHub) {
-          return `The top hub is ${topHub.name} with a P_fare of ${topHub.pFare}%. This is based on ${topHub.arrivals.length} arrivals, weather conditions, and supply factors.`;
+          return `The top hub is **${topHub.name}** with a P_fare probability of **${topHub.pFare}%**. This is computed from ${topHub.arrivals?.length || 0} arrivals, weather factors, and local driver supply.`;
         }
-        return 'I can see the hub rankings on the left. The top hub has the highest probability of securing a fare.';
+        return 'P_fare represents the probability of securing a passenger fare at a hub. Higher scores (green 80%+) indicate shorter wait times and higher demand.';
       }
       
-      if (q.includes('rank') || q.includes('queue') || q.includes('permit')) {
-        return 'Licensed taxis with rank permits (FreeNow, Independent) have priority at airport ranks. Uber and Bolt drivers must use app-only pickup zones.';
+      if (q.includes('rank') || q.includes('queue') || q.includes('permit') || q.includes('permit')) {
+        return 'Licensed taxis with airport/station rank permits (e.g., FreeNow, Independent) have official queue access. App-based services (Uber, Bolt) must pick up at designated app pickup zones.';
       }
       
-      if (q.includes('weather') || q.includes('rain') || q.includes('temperature')) {
-        const weather = state.brief?.hubs[0]?.weather;
+      if (q.includes('weather') || q.includes('rain') || q.includes('temperature') || q.includes('storm')) {
+        const weather = state.brief?.hubs?.[0]?.weather;
         if (weather) {
-          return `Current conditions: ${weather.precipMmHr}mm/hr rain, ${weather.tempC}°C. ${weather.precipMmHr > 5 ? 'Heavy rain is increasing demand for rides.' : 'Light conditions, normal demand.'}`;
+          return `Current weather in ${state.city}: **${weather.tempC}°C**, rain: **${weather.precipMmHr}mm/hr**. ${weather.precipMmHr > 3 ? 'Precipitation is driving increased passenger demand across hubs.' : 'Mild weather conditions, normal baseline demand.'}`;
         }
-        return 'Weather data is shown for each hub in the rankings panel.';
+        return 'Weather conditions heavily impact passenger demand. Rainfall increases taxi demand significantly at uncovered exit points.';
       }
       
-      if (q.includes('yield') || q.includes('earn') || q.includes('money')) {
-        return 'Higher P_fare scores mean shorter wait times and more fares per shift. Aim for green hubs (80%+) for optimal earnings.';
+      if (q.includes('yield') || q.includes('earn') || q.includes('money') || q.includes('fare')) {
+        return 'To maximize hourly yield, target hubs with green P_fare scores (80%+). Higher probabilities mean faster passenger turnover and less idle waiting time between trips.';
       }
       
-      if (q.includes('how') && q.includes('work')) {
-        return 'Turas AI analyzes live transit data, weather, and demand patterns to predict where you\'ll get a fare fastest. Green hubs are your best bet!';
+      if (q.includes('how') && (q.includes('work') || q.includes('calculate') || q.includes('algorithm'))) {
+        return 'Turas AI processes live flight/rail/ferry arrivals, precipitation & temperature data, and platform supply density to compute the P_fare demand probability index for every transit hub in range.';
       }
       
-      if (q.includes('hello') || q.includes('hi') || q.includes('hey')) {
-        return 'Hello! How can I help you today? Ask me about scores, weather, or rank rules.';
+      if (q.includes('hello') || q.includes('hi') || q.includes('hey') || q.includes('greetings')) {
+        return 'Hello! I am Turas AI Assistant. I can help with hub demand predictions, weather impacts, transport rank policies, and general driver queries.';
       }
-      
-      return 'I can help with score explanations, rank rules, weather impacts, or transit policies. Try asking about the top-ranked hub or current weather conditions.';
+
+      if (q.includes('dublin') || q.includes('airport') || q.includes('cork') || q.includes('shannon') || q.includes('galway') || q.includes('terminal')) {
+        return `Hubs in ${state.city.toUpperCase()} are monitored live. Terminal arrival peaks correlate with high P_fare surges. Check the ranking list on the left for live recommendations.`;
+      }
+
+      // General intelligent assistant response
+      return `I am Turas AI Assistant. Regarding your question on "${question}":\n\nI analyze transit hub recommendations, driver positioning, P_fare probabilities, weather impacts, and general queries. ${state.matrix?.hubs?.[0] ? `Currently, the top recommendation is **${state.matrix.hubs[0].name} (${state.matrix.hubs[0].pFare}%)**.` : 'Click **Begin Search** to evaluate live recommendations for your location.'}`;
     }
 
     // ─── Status LED ───

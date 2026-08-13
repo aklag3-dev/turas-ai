@@ -5,5 +5,8 @@ compatibility_date = "2026-08-12"
 [vars]
 WORKER_VERSION = "1.0.0"
 
+[ai]
+binding = "AI"
+
 [observability]
 enabled = true
