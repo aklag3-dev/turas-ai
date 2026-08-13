@@ -500,7 +500,7 @@ ${context ? 'Current Live Dashboard Context:\n' + JSON.stringify(context, null, 
     // 1. Try Gemini API first if API key is present
     if (apiKey) {
       try {
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
         const contents = [];
         
@@ -548,7 +548,7 @@ ${context ? 'Current Live Dashboard Context:\n' + JSON.stringify(context, null, 
           const data = await resp.json();
           const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
           if (replyText) {
-            return Response.json({ response: replyText, model: 'gemini-2.0-flash', source: 'gemini' }, { headers: corsHeaders });
+            return Response.json({ response: replyText, model: 'gemini-2.5-flash', source: 'gemini' }, { headers: corsHeaders });
           } else {
             console.error('[Turas AI Worker] Gemini API returned no text:', JSON.stringify(data));
           }

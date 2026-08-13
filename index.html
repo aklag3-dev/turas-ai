@@ -1164,7 +1164,7 @@
           <div class="dropdown-group">
             <span class="dropdown-label">Primary Platform</span>
             <select id="platform-select" class="platform-select" onchange="onConfigChange()">
-              <option value="freenow">FreeNow (Taxi)</option>
+              <option value="freenow">FreeNow</option>
               <option value="independent">Independent Taxi</option>
               <option value="uber">Uber</option>
               <option value="bolt">Bolt</option>
@@ -1785,6 +1785,21 @@
           ${hub.rationale ? `<div style="margin-top:0.75rem;font-size:0.775rem;color:var(--text-secondary);background:var(--bg-tertiary);padding:0.5rem 0.75rem;border-radius:0.375rem;border-left:3px solid var(--green);"><strong>AI Rationale:</strong> ${hub.rationale}</div>` : ''}
         </div>
 
+        <!-- Recommendation Algorithm -->
+        <div class="detail-card">
+          <div class="detail-card-title">Recommendation Algorithm</div>
+          <div style="font-size:0.775rem;color:var(--text-secondary);line-height:1.5;">
+            <p style="margin-bottom:0.5rem;">The <strong>Demand Score</strong> is calculated using a multi-factor algorithm:</p>
+            <ul style="margin-left:1rem;margin-bottom:0.5rem;">
+              <li><strong>Passenger Demand:</strong> Estimated passengers from live arrivals (flights, trains, ferries) vs hub capacity</li>
+              <li><strong>Weather Boost:</strong> Rain/cold increases demand (up to +45%)</li>
+              <li><strong>Disruption Factor:</strong> Service delays increase passenger buildup</li>
+              <li><strong>Supply Competition:</strong> More drivers in area reduces per-driver opportunity</li>
+            </ul>
+            <p style="font-size:0.7rem;color:var(--text-muted);margin:0;">Score = (Demand × Weather × Disruption) ÷ Supply, clamped to 5–99%</p>
+          </div>
+        </div>
+
         <!-- Ingested Live Arrivals Stream -->
         <div class="detail-card">
           <div class="detail-card-title">
@@ -2045,16 +2060,31 @@
       updateProgressStep(2, '📡 Live Ingestion (Arrivals & Weather)', `Ingested arrivals & weather for ${hubCount} hubs`, 'done');
 
       // Step 3: P_fare Probability Calculation
-      updateProgressStep(3, '📊 P_fare Probability Calculation', 'Computing S_base, M_weather, M_disrupt & B_supply per hub...', 'running');
+      updateProgressStep(3, '📊 Demand Score Calculation', 'Computing demand probability for each hub...', 'running');
       await new Promise(r => setTimeout(r, 200));
       const avgScore = state.matrix?.summary?.avgPFare || 0;
-      updateProgressStep(3, '📊 P_fare Probability Calculation', `Computed demand probability index (Avg P_fare: ${avgScore}%)`, 'done');
+      updateProgressStep(3, '📊 Demand Score Calculation', `Computed demand scores (Average: ${avgScore}%)`, 'done');
 
       // Step 4: Hub Ranking & Route Synthesis
-      updateProgressStep(4, '🏁 Ranking & Route Synthesis', 'Ranking hubs by P_fare, clustering & establishing optimal routes...', 'running');
+      updateProgressStep(4, '🏁 Ranking & Route Synthesis', 'Ranking hubs by demand score, clustering & establishing optimal routes...', 'running');
       await new Promise(r => setTimeout(r, 200));
       const topHub = state.matrix?.hubs?.[0];
       updateProgressStep(4, '🏁 Ranking & Route Synthesis', `Top recommendation: ${topHub ? topHub.name + ' (' + topHub.pFare + '%)' : 'Complete'}`, 'done');
+
+      // Step 5: Hub Ranking Card Updated
+      updateProgressStep(5, '📋 Hub Ranking Cards Updated', 'Refreshing hub cards with live data...', 'running');
+      await new Promise(r => setTimeout(r, 150));
+      // Force refresh of hub cards
+      renderHubList(state.matrix);
+      renderMapMarkers(state.matrix);
+      // Force DOM update
+      const hubListEl = document.getElementById('hub-list');
+      if (hubListEl) {
+        hubListEl.style.display = 'none';
+        hubListEl.offsetHeight;
+        hubListEl.style.display = '';
+      }
+      updateProgressStep(5, '📋 Hub Ranking Cards Updated', `Updated ${state.matrix?.hubs?.length || 0} hub cards with live data`, 'done');
 
       // Task complete: Hide banner, show toast notification & update LED
       hideProcessingBanner();
