@@ -1,27 +1,15 @@
 // Turas AI — Resident Researcher Agent
 // ES-module: exports TurasResearcher class
 // Uses Cloudflare Worker proxy for live API calls with simulated fallback
-// Radius-based hub discovery: finds all hubs within driver's selected radius
+// Radius-based hub discovery: fetches hubs from Google Sheets on session start
 
 const WORKER_URL = 'https://turas-ai-proxy.symphony-driver-assist.workers.dev';
+const HUBS_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1SM1HlDJCCxJiXu8-kUR8UEbB55kXP-bCqApxiqePXOs/export?format=csv&gid=0&sheet=Transit_Hubs';
 
-// ─── All Irish Transit Hubs (flat registry) ───
-export const ALL_HUBS = [
-  // Dublin
-  { hubId: 'dub-t1', name: 'Dublin Airport T1', lat: 53.4213, lng: -6.2700, kHub: 450, modes: ['flight'], region: 'dublin' },
-  { hubId: 'dub-t2', name: 'Dublin Airport T2', lat: 53.4273, lng: -6.2437, kHub: 450, modes: ['flight'], region: 'dublin' },
-  { hubId: 'dub-heuston', name: 'Dublin Heuston', lat: 53.3460, lng: -6.2947, kHub: 250, modes: ['train'], region: 'dublin' },
-  { hubId: 'dub-connolly', name: 'Dublin Connolly', lat: 53.3521, lng: -6.2483, kHub: 200, modes: ['train'], region: 'dublin' },
-  { hubId: 'dub-port', name: 'Dublin Port', lat: 53.3494, lng: -6.2120, kHub: 180, modes: ['ferry'], region: 'dublin' },
-  // Cork
-  { hubId: 'ork', name: 'Cork Airport', lat: 51.8414, lng: -8.4906, kHub: 120, modes: ['flight'], region: 'cork' },
-  { hubId: 'cork-kent', name: 'Cork Kent', lat: 51.8969, lng: -8.4664, kHub: 150, modes: ['train'], region: 'cork' },
-  { hubId: 'ringaskiddy', name: 'Ringaskiddy', lat: 51.8167, lng: -8.2833, kHub: 100, modes: ['ferry'], region: 'cork' },
-  // Shannon / Limerick
-  { hubId: 'snn', name: 'Shannon Airport', lat: 52.7019, lng: -8.9243, kHub: 100, modes: ['flight'], region: 'shannon' },
-  { hubId: 'limerick-colbert', name: 'Limerick Colbert', lat: 52.6597, lng: -8.6282, kHub: 120, modes: ['train'], region: 'shannon' },
-  { hubId: 'shannon-foynes', name: 'Shannon Foynes Port', lat: 52.6200, lng: -9.1000, kHub: 80, modes: ['ferry'], region: 'shannon' },
-];
+// ─── Hubs cache (loaded from Google Sheets) ───
+let ALL_HUBS = [];
+let hubsLoaded = false;
+let hubsLoadPromise = null;
 
 // ─── Haversine distance (km) ───
 function haversineKm(lat1, lng1, lat2, lng2) {
@@ -32,6 +20,120 @@ function haversineKm(lat1, lng1, lat2, lng2) {
             Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
             Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ─── Parse CSV from Google Sheets ───
+function parseCSV(csv) {
+  const lines = csv.trim().split('\n');
+  const headers = lines[0].split(',').map(h => h.trim());
+  const hubs = [];
+  
+  for (let i = 1; i < lines.length; i++) {
+    const values = parseCSVLine(lines[i]);
+    if (values.length < headers.length) continue;
+    
+    const row = {};
+    headers.forEach((header, idx) => {
+      row[header] = values[idx]?.trim() || '';
+    });
+    
+    // Convert to hub format
+    const hub = {
+      hubId: row['Location ID'] || `hub-${i}`,
+      name: row['Name'] || 'Unknown Hub',
+      lat: parseFloat(row['Latitude']) || 0,
+      lng: parseFloat(row['Longitude']) || 0,
+      kHub: getKHubForType(row['Transit Type']),
+      modes: getModesForType(row['Transit Type']),
+      region: getRegionForLocation(parseFloat(row['Latitude']), parseFloat(row['Longitude'])),
+      address: row['Address'] || '',
+      countryCode: row['Country Code'] || 'IE',
+      postalCode: row['Postal Code'] || '',
+    };
+    
+    if (hub.lat !== 0 && hub.lng !== 0) {
+      hubs.push(hub);
+    }
+  }
+  
+  return hubs;
+}
+
+// ─── Parse CSV line handling quoted fields ───
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  
+  result.push(current);
+  return result;
+}
+
+// ─── Get K_hub based on transit type ───
+function getKHubForType(transitType) {
+  const type = transitType?.toLowerCase() || '';
+  if (type.includes('airport')) return 300; // Average airport
+  if (type.includes('train') || type.includes('rail')) return 200;
+  if (type.includes('ferry') || type.includes('port')) return 150;
+  if (type.includes('bus')) return 100;
+  return 150; // Default
+}
+
+// ─── Get modes based on transit type ───
+function getModesForType(transitType) {
+  const type = transitType?.toLowerCase() || '';
+  if (type.includes('airport')) return ['flight'];
+  if (type.includes('train') || type.includes('rail')) return ['train'];
+  if (type.includes('ferry') || type.includes('port')) return ['ferry'];
+  if (type.includes('bus')) return ['bus'];
+  return ['train']; // Default
+}
+
+// ─── Get region based on coordinates ───
+function getRegionForLocation(lat, lng) {
+  if (lat > 53.2 && lat < 53.5 && lng > -6.5 && lng < -6.0) return 'dublin';
+  if (lat > 51.8 && lat < 52.0 && lng > -8.6 && lng < -8.3) return 'cork';
+  if (lat > 52.5 && lat < 52.8 && lng > -9.1 && lng < -8.7) return 'shannon';
+  return 'other';
+}
+
+// ─── Load hubs from Google Sheets ───
+async function loadHubsFromSheet() {
+  if (hubsLoaded) return ALL_HUBS;
+  if (hubsLoadPromise) return hubsLoadPromise;
+  
+  hubsLoadPromise = (async () => {
+    try {
+      const resp = await fetch(HUBS_SHEET_URL);
+      if (!resp.ok) throw new Error(`Failed to fetch hubs: ${resp.status}`);
+      
+      const csv = await resp.text();
+      ALL_HUBS = parseCSV(csv);
+      hubsLoaded = true;
+      
+      console.log(`[Turas AI] Loaded ${ALL_HUBS.length} hubs from Google Sheets`);
+      return ALL_HUBS;
+    } catch (err) {
+      console.error('[Turas AI] Failed to load hubs from sheet:', err);
+      // Fallback to empty list
+      return [];
+    }
+  })();
+  
+  return hubsLoadPromise;
 }
 
 // ─── Find hubs within radius ───
@@ -89,10 +191,30 @@ function processFlightData(flights, hub) {
   if (!flights || !Array.isArray(flights)) return [];
   return flights
     .filter(f => {
-      const terminal = f.terminal;
-      if (hub.hubId === 'dub-t1' && terminal !== 'T1') return false;
-      if (hub.hubId === 'dub-t2' && terminal !== 'T2') return false;
-      return true;
+      // Match flights to hub by IATA code in hub name or ID
+      const hubName = hub.name.toLowerCase();
+      const hubId = hub.hubId.toLowerCase();
+      
+      if (hubId.includes('dub1') || hubName.includes('terminal 1')) {
+        return f.destination === 'DUB' && f.terminal === 'T1';
+      }
+      if (hubId.includes('dub2') || hubName.includes('terminal 2')) {
+        return f.destination === 'DUB' && f.terminal === 'T2';
+      }
+      if (hubId.includes('ork') || hubName.includes('cork')) {
+        return f.destination === 'ORK';
+      }
+      if (hubId.includes('snn') || hubName.includes('shannon')) {
+        return f.destination === 'SNN';
+      }
+      if (hubId.includes('noc') || hubName.includes('knock')) {
+        return f.destination === 'NOC';
+      }
+      if (hubId.includes('kir') || hubName.includes('kerry')) {
+        return f.destination === 'KIR';
+      }
+      
+      return false;
     })
     .map(f => ({
       mode: 'flight',
@@ -125,9 +247,10 @@ function processFerryData(ferryResp, hub) {
   if (!ferryResp || !ferryResp.data) return [];
   return ferryResp.data
     .filter(f => {
-      if (hub.hubId === 'dub-port' && !f.port?.includes('Dublin')) return false;
-      if (hub.hubId === 'ringaskiddy' && !f.port?.includes('Ringaskiddy')) return false;
-      return true;
+      const hubName = hub.name.toLowerCase();
+      if (hubName.includes('dublin port')) return f.port?.includes('Dublin');
+      if (hubName.includes('ringaskiddy')) return f.port?.includes('Ringaskiddy');
+      return false;
     })
     .map(f => ({
       mode: 'ferry',
@@ -176,6 +299,9 @@ export class TurasResearcher {
   }
 
   async collect(config) {
+    // Ensure hubs are loaded from Google Sheets
+    await loadHubsFromSheet();
+    
     const {
       driverCoords = null,
       radiusKm = 25,
@@ -264,4 +390,14 @@ export class TurasResearcher {
       hubs: hubData,
     };
   }
+}
+
+// Export function to get loaded hubs
+export function getLoadedHubs() {
+  return ALL_HUBS;
+}
+
+// Export function to check if hubs are loaded
+export function areHubsLoaded() {
+  return hubsLoaded;
 }
