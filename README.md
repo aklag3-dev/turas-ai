@@ -40,7 +40,9 @@ Turas AI (Irish: *turas* = journey) calculates the probability a driver will sec
 ### Agent Pipeline
 1. **Researcher Agent** — Collects live telemetry (arrivals, weather, disruptions) via Worker proxy
 2. **Designer Agent** — Executes P_fare equations, ranks hubs, clusters by demand
-3. **Dashboard** — Renders Leaflet map, hub cards, weather strip, chatbot, TTS alerts
+3. **Maker Agent** — Builds and maintains the dashboard UI, map rendering, hub cards, chat interface
+4. **Communicator Agent** — Generates TTS alerts, chatbot responses, user-facing notifications
+5. **Manager Agent** — Orchestrates the pipeline, enforces quality gates, synthesizes results
 
 ---
 
@@ -91,16 +93,39 @@ npm run secret:ors             # Set OpenRouteService API key (optional)
 
 ## Features
 
+### AI Models
+- **Google Gemini 2.5 Flash** — Intelligent chatbot for hub rules and general out-of-domain questions
+- **Workers AI Fallback** — Llama 3.1 8B for offline/backup chat responses
+- **P_fare Prediction Engine** — Proprietary fare probability scoring model
+
+### Algorithms
+- **P_fare Multi-Factor Scoring** — 6-step equation combining demand, weather, disruption, and supply
+- **Hub Clustering** — Dynamic demand-based hub grouping
+- **OSRM Road Routing** — Real driving geometry with distance and travel time
+
+### MCP (Model Context Protocol)
+- **Cloudflare Worker Proxy** — Centralized API gateway for all external data sources
+- **Agent Pipeline** — Sequential Researcher → Designer → Maker → Communicator → Manager orchestration
+
+### APIs
+- **Aviationstack** — Live flight arrivals
+- **Open-Meteo** — Hourly weather forecasts
+- **Irish Rail Realtime** — Train arrival schedules
+- **VesselFinder** — Ferry ETAs (simulated)
+- **OpenRouteService** — Driving route calculation
+
+### Privacy & Compliance
+- **Zero-PII Architecture** — Anonymous session IDs (AC-UUID), no personal data collected
+- **EU AI Act Article 50** — Transparency notice and explainable parameters
+- **GDPR Compliant** — No user data storage, anonymous analytics only
+
+### Dashboard
 - **Live P_fare Scores** — Colour-coded pins (green ≥80%, amber 50–79%, red <50%)
 - **Search Configuration Box** — Demo City, Primary Platform, and Search Radius (10–100 km)
 - **Persistent Stepper Panel** — Real-time 4-step task progress tracking on screen
-- **OSRM Road Route Navigation** — Real driving road geometry, distance, and travel time
 - **Hub Details Extension Panel** — Deep-dive overview, $P_{fare}$ parameters ($S_{base}, M_{weather}, M_{disrupt}, B_{supply}$), arrivals stream, weather telemetry & raw JSON
-- **Google Gemini 2.5 Flash Chatbot** — Intelligent AI assistant for hub rules and general out-of-domain questions
 - **Drive Mode** — High-contrast UI with TTS audio alerts for hands-free operation
 - **Outcome Feedback** — Drivers log results to calibrate the prediction model
-- **Zero-PII** — Anonymous session IDs (AC-UUID), no personal data collected
-- **EU AI Act Compliant** — Article 50 transparency notice, explainable parameters
 
 ---
 
