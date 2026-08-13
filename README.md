@@ -127,13 +127,6 @@ npm run secret:ors             # Set OpenRouteService API key (optional)
 
 Built for the **NCI Higher Diploma in AI for Business** assessment (H9CEAI: Customer Engagement & Artificial Intelligence).
 
-### Assessment Criteria Met
-1. **Agent Architecture (25%)** — Five agents: Researcher, Designer, Maker, Communicator, Manager
-2. **Handoff & Orchestration (25%)** — Unbroken sequential JSON pipeline
-3. **Working Prototype & Live MCP (20%)** — GitHub Pages + Cloudflare Worker + live APIs
-4. **Strategic Rationale & Governance (15%)** — GDPR zero-PII, EU AI Act Article 50
-5. **Reflection & Evaluation (15%)** — Feedback loop for model calibration
-
 ---
 
 ## Tech Stack
