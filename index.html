@@ -564,30 +564,6 @@
       margin-left: 0.4rem;
       font-weight: 500;
     }
-
-    .chat-api-bar {
-      padding: 0.35rem 0.75rem;
-      background: var(--bg-primary);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      gap: 0.5rem;
-      align-items: center;
-    }
-
-    .gemini-key-input {
-      flex: 1;
-      padding: 0.3rem 0.5rem;
-      background: var(--bg-tertiary);
-      border: 1px solid var(--border);
-      border-radius: 0.25rem;
-      color: var(--text-primary);
-      font-size: 0.75rem;
-    }
-
-    .gemini-key-input:focus {
-      outline: none;
-      border-color: #3b82f6;
-    }
     
     .chat-close {
       background: none;
@@ -774,9 +750,6 @@
         <span class="gemini-badge" title="Powered by Google Gemini AI">Gemini AI</span>
       </div>
       <button class="chat-close" onclick="toggleChat()">×</button>
-    </div>
-    <div class="chat-api-bar">
-      <input type="password" id="gemini-key-input" class="gemini-key-input" placeholder="Google AI Studio Gemini API Key (optional)..." onchange="saveGeminiKey()">
     </div>
     <div class="chat-messages" id="chat-messages">
       <div class="chat-message bot">Hello! I'm your Turas AI assistant powered by Google Gemini. Ask me about hub scores, weather, rank rules, or ANY question outside transport!</div>
@@ -1267,25 +1240,10 @@
       localStorage.setItem('turas_theme', newTheme);
     };
 
-    // ─── Gemini Key Management ───
-    window.saveGeminiKey = function() {
-      const val = document.getElementById('gemini-key-input').value.trim();
-      if (val) {
-        localStorage.setItem('turas_gemini_key', val);
-      } else {
-        localStorage.removeItem('turas_gemini_key');
-      }
-    };
-
     // ─── Chat Functions ───
     window.toggleChat = function() {
       const panel = document.getElementById('chat-panel');
       panel.classList.toggle('open');
-      const savedKey = localStorage.getItem('turas_gemini_key') || '';
-      const inputEl = document.getElementById('gemini-key-input');
-      if (savedKey && inputEl && !inputEl.value) {
-        inputEl.value = savedKey;
-      }
     };
 
     const chatHistory = [];
@@ -1314,8 +1272,6 @@
       messagesContainer.appendChild(botMsg);
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
-      const apiKey = localStorage.getItem('turas_gemini_key') || (document.getElementById('gemini-key-input')?.value || '').trim();
-
       const context = {
         locationMode: state.locationMode,
         city: state.city,
@@ -1333,7 +1289,7 @@
       };
 
       try {
-        const responseText = await getAIResponse(message, context, apiKey, chatHistory);
+        const responseText = await getAIResponse(message, context, chatHistory);
         botMsg.innerHTML = formatMarkdownResponse(responseText);
         
         chatHistory.push({ role: 'user', text: message });
@@ -1359,13 +1315,12 @@
         .replace(/\n/g, '<br>');
     }
 
-    async function getAIResponse(message, context, apiKey, history) {
-      // 1. Try Worker proxy first (Worker uses env.GEMINI_API_KEY or user passed key)
+    async function getAIResponse(message, context, history) {
       try {
         const resp = await fetch(`${WORKER_URL}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message, context, apiKey, history })
+          body: JSON.stringify({ message, context, history })
         });
 
         if (resp.ok) {
@@ -1375,51 +1330,11 @@
           }
         }
       } catch (e) {
-        console.warn('[Turas AI] Worker chat proxy call failed, attempting direct Gemini API:', e);
+        console.warn('[Turas AI] Worker chat API call error:', e);
       }
 
-      // 2. Direct call to Google AI Studio Gemini API if key is present
-      if (apiKey) {
-        try {
-          const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-          const systemPrompt = `You are Turas AI, an intelligent driver assistant for transport hubs in Ireland.
-You assist taxi and rideshare drivers in maximizing earnings, understanding hub recommendations (P_fare), weather, and transport rules.
-You are ALSO an AI assistant powered by Google Gemini, capable of answering ANY general question or topic outside transport (general knowledge, math, science, coding, advice, trivia, etc.).
-Keep responses concise, clear, and friendly.
-
-${context ? 'Current Live Dashboard Context:\n' + JSON.stringify(context) : ''}`;
-
-          const payload = {
-            contents: [
-              {
-                role: 'user',
-                parts: [{ text: `${systemPrompt}\n\nUser Question: ${message}` }]
-              }
-            ]
-          };
-
-          const directResp = await fetch(geminiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-
-          if (directResp.ok) {
-            const data = await directResp.json();
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) return text;
-          }
-        } catch (e) {
-          console.error('[Turas AI] Direct Gemini API call failed:', e);
-        }
-      }
-
-      // 3. Fallback to local rule-based answer
-      const localAnswer = generateChatResponse(message);
-      if (!apiKey) {
-        return localAnswer + '<br><br>💡 <em>Tip: Add a Google AI Studio Gemini API key in the chat header above to process any question with Gemini AI!</em>';
-      }
-      return localAnswer;
+      // Fallback to local rule-based answer
+      return generateChatResponse(message);
     }
 
     function generateChatResponse(question) {
@@ -1582,12 +1497,6 @@ ${context ? 'Current Live Dashboard Context:\n' + JSON.stringify(context) : ''}`
     // Run initial discovery after a short delay to ensure map is ready
     setTimeout(initialDiscovery, 500);
     
-    // Restore saved Gemini Key if available
-    const savedGeminiKey = localStorage.getItem('turas_gemini_key') || '';
-    if (savedGeminiKey && document.getElementById('gemini-key-input')) {
-      document.getElementById('gemini-key-input').value = savedGeminiKey;
-    }
-
     // Enable the search button
     document.getElementById('search-btn').disabled = false;
     document.getElementById('search-btn').textContent = 'Begin Search';
