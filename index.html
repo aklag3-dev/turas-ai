@@ -2162,8 +2162,7 @@
         } : null,
         hubCount: hasCompletedAnalysis ? (state.matrix?.hubs?.length || 0) : 0,
         weather: state.brief?.hubs?.[0]?.weather || null
-      };
-      try {
+      };      try {
         const responseText = await getAIResponse(message, context, chatHistory);
         botMsg.innerHTML = formatMarkdownResponse(responseText);
         
