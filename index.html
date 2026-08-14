@@ -1437,11 +1437,11 @@
       } else {
         state.driverMarker = L.marker([lat, lng], {
           draggable: true,
-          icon: L.divIcon({
-            className: 'driver-marker-wrapper',
-            html: '<div class="driver-marker"></div>',
-            iconSize: [20, 20]
-          })
+            icon: L.divIcon({
+              className: 'driver-marker-wrapper',
+              html: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 -960 960 960"><path fill="#3b82f6" d="M200-204v54q0 12.75-8.62 21.37Q182.75-120 170-120h-20q-12.75 0-21.37-8.63Q120-137.25 120-150v-324l85-256q5-14 16.5-22t26.5-8h464q15 0 26.5 8t16.5 22l85 256v324q0 12.75-8.62 21.37Q822.75-120 810-120h-21q-13 0-21-8.63-8-8.62-8-21.37v-54H200Zm3-330h554l-55-166H258l-55 166Zm-23 60v210-210Zm105.76 160q23.24 0 38.74-15.75Q340-345.5 340-368q0-23.33-15.75-39.67Q308.5-424 286-424q-23.33 0-39.67 16.26Q230-391.47 230-368.24q0 23.24 16.26 38.74 16.27 15.5 39.5 15.5ZM675-314q23.33 0 39.67-15.75Q731-345.5 731-368q0-23.33-16.26-39.67Q698.47-424 675.24-424q-23.24 0-38.74 16.26-15.5 16.27-15.5 39.5 0 23.24 15.75 38.74Q652.5-314 675-314Zm-495 50h600v-210H180v210Z"/></svg>',
+              iconSize: [20, 20]
+            })
         }).addTo(state.map);
         state.driverMarker.bindPopup('Your location (drag or click map to move)');
 
@@ -1673,11 +1673,20 @@
       matrix.hubs.forEach(hub => {
         // Use grey for pre-search, otherwise use pFare color
         const markerColor = (hub.pFare === null || hub.pFare === undefined) ? '#94a3b8' : hub.pinColor;
-        
+
+        let svgPath;
+        if ((hub.modes && hub.modes.includes('flight')) || /(air|ork|snn|dub)/.test(hub.hubId || '')) {
+          svgPath = 'M285-80v-83l124-86v-172L80-288v-102l329-231v-188q0-29 21-50t50-21q29 0 50 21t21 50v188l329 231v102L551-421v172l123 86v83l-194-59-195 59Z';
+        } else if ((hub.modes && hub.modes.includes('ferry')) || /(port|ferry)/.test(hub.hubId || '')) {
+          svgPath = 'M178-80h-58v-60h58q40 0 79-11t76-34q35 22 72 32.5t75 10.5q38 0 75-10.5t72-32.5q38 23 77.5 34t78.5 11h57v60h-57q-39 0-78-9t-77-28q-38 19-75 28t-73 9q-36 0-73-9.5T333-117q-38 18-77.5 27.5T178-80Zm226.5-169.5Q365-270 330-307q-33 33-71 52.5T182-230l-71-245q-4-12 2-22.5t18-14.5l55-16v-190q0-25 17.5-42.5T246-778h132v-103h204v103h132q25 0 42.5 17.5T774-718v190l55 16q12 4 18 14.5t2 22.5l-71 245q-39-5-77-24.5T630-307q-35 37-74.5 57.5T480-229q-36 0-75.5-20.5ZM481-289q32 0 58.5-18t47.5-43l41-48 36 38q16 17 34 31t38 25l48-159-304-92-304 92 48 159q20-11 38-25t34-31l36-38 41 48q22 25 49 43t59 18ZM246-547l234-71 234 72v-172H246v171Zm234 125Z';
+        } else {
+          svgPath = 'M160-340v-380q0-41 19-71.5t58.5-50q39.5-19.5 100-29T480-880q86 0 146.5 9t99 28.5Q764-823 782-793t18 73v380q0 59-40.5 99.5T660-200l60 60v20h-70l-80-80H390l-80 80h-70v-20l60-60q-59 0-99.5-40.5T160-340Zm320-480q-120 0-173 15.5T231-760h501q-18-27-76.5-43.5T480-820zm220-545h234v-155H220v155Zm440 60H220h520-80Zm-146-60h226v-155H514v155ZM374-331q16-16 16-39t-16-39q-16-16-39-16t-39 16q-16 16-16 39t16 39q16 16 39 16t39-16Zm290 0q16-16 16-39t-16-39q-16-16-39-16t-39 16q-16 16-16 39t16 39q16 16 39 16t39-16Zm-364 76h360q34 0 57-25t23-60v-145H220v145q0 35 23 60t57 25Zm180-505h252-501 249Z';
+        }
+
         const marker = L.marker([hub.lat, hub.lng], {
           icon: L.divIcon({
             className: 'custom-marker',
-            html: `<div style="background: ${markerColor}; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: transform 0.3s;"></div>`,
+            html: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 -960 960 960"><path fill="${markerColor}" d="${svgPath}"/></svg>`,
             iconSize: [24, 24]
           })
         }).addTo(state.map);
