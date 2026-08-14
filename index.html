@@ -197,6 +197,13 @@
       color: var(--text-primary);
       font-size: 0.875rem;
       cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    .city-select:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      background: var(--bg-secondary);
     }
     
     .city-select.hidden {
@@ -1529,7 +1536,8 @@
       }
 
       document.getElementById('gps-btn').classList.add('active');
-        document.getElementById('city-select').disabled = true;
+      document.getElementById('gps-btn').textContent = '📍 GPS Active';
+      document.getElementById('city-select').disabled = true;
       state.locationMode = 'gps';
 
       navigator.geolocation.getCurrentPosition(
@@ -1564,15 +1572,18 @@
                 select.value = city;
               }
             }
-            select.disabled = false;
+            // Keep city selector locked in GPS live mode
+            select.disabled = true;
           } catch (err) {
             console.warn('Reverse geocoding failed:', err);
-            document.getElementById('city-select').disabled = false;
+            // Keep city selector locked even if reverse-geocoding fails
+            document.getElementById('city-select').disabled = true;
           }
         },
         (error) => {
                         alert('Unable to get location: ' + error.message);
                         document.getElementById('gps-btn').classList.remove('active');
+                        document.getElementById('gps-btn').textContent = '📍 Allow GPS';
                         document.getElementById('city-group').classList.remove('hidden');
                         document.getElementById('city-select').disabled = false;
                         state.locationMode = 'demo';
