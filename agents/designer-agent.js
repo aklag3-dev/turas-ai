@@ -161,7 +161,14 @@ export class TurasDesigner {
       results.push(result);
     }
 
-    results.sort((a, b) => b.pFare - a.pFare);
+    // Combined ranking: proximity (driving time) + probability of getting a fare
+    // High pFare close by > High pFare far away (fuel cost penalty for distance)
+    const referenceTimeMin = 15;
+    results.sort((a, b) => {
+      const scoreA = a.pFare / (1 + (a.drivingTimeMin || 0) / referenceTimeMin);
+      const scoreB = b.pFare / (1 + (b.drivingTimeMin || 0) / referenceTimeMin);
+      return scoreB - scoreA;
+    });
     results.forEach((r, i) => r.rank = i + 1);
 
     const avgPFare = Math.round(results.reduce((s, r) => s + r.pFare, 0) / (results.length || 1));
