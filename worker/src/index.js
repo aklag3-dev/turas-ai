@@ -30,7 +30,7 @@ export default {
         return await handleTransit(request, corsHeaders);
       }
       if (path === '/api/ferries') {
-        return await handleFerries(request, corsHeaders);
+        return await handleFerries(request, env, corsHeaders);
       }
       if (path === '/api/route') {
         return await handleRoute(request, env, corsHeaders);
@@ -367,12 +367,87 @@ async function handleTransit(request, corsHeaders) {
   }, { headers: corsHeaders });
 }
 
-async function handleFerries(request, corsHeaders) {
+// Map hub IDs to UN/LOCODEs for Irish ferry ports
+const FERRY_PORT_LOCODES = {
+  'IE-FRY-ROS': 'IERSA',  // Rosslare Europort
+  'IE-FRY-RIN': 'IERIN',  // Ringaskiddy (Cork)
+  'IE-FRY-DUB': 'IEDUB',  // Dublin Port
+  'IE-FRY-RSV': 'IERVA',  // Rossaveel
+  'IE-FRY-TAR': 'IETRB',  // Tarbert
+  'IE-FRY-GAL': 'IEGAL',  // Galway
+  'IE-FRY-DUN': 'IEDLG',  // Dún Laoghaire
+  'IE-FRY-COB': 'IECOB',  // Cobh
+  'IE-FRY-KLY': 'IEKLY',  // Killybegs
+  'IE-FRY-WAT': 'IEWAT',  // Waterford
+};
+
+async function handleFerries(request, env, corsHeaders) {
+  const url = new URL(request.url);
+  const port = url.searchParams.get('port');  // Hub ID (e.g., IE-FRY-DUB)
+  const interval = url.searchParams.get('interval') || '1440';  // Default: next 24 hours
+
+  const locode = FERRY_PORT_LOCODES[port];
+  if (!locode) {
+    return Response.json({
+      data: generateSimulatedFerries(),
+      simulated: true,
+      source: 'fallback',
+      note: `Unknown port: ${port}. Using simulated data.`
+    }, { headers: corsHeaders });
+  }
+
+  const apiKey = env.VESSELFINDER_API_KEY;
+  if (!apiKey) {
+    return Response.json({
+      data: generateSimulatedFerries(),
+      simulated: true,
+      source: 'fallback',
+      note: 'VesselFinder API key not configured. Using simulated data.'
+    }, { headers: corsHeaders });
+  }
+
+  try {
+    const resp = await fetch(
+      `https://api.vesselfinder.com/expectedarrivals?userkey=${apiKey}&interval=${interval}&locode=${locode}&format=json`
+    );
+    if (resp.ok) {
+      const vessels = await resp.json();
+      const arrivals = vessels.map(v => ({
+        name: v.AIS?.NAME || 'Unknown',
+        mmsi: v.AIS?.MMSI,
+        imo: v.AIS?.IMO,
+        type: v.AIS?.TYPE,
+        eta: v.AIS?.ETA || null,
+        etaAIS: v.AIS?.ETA_AIS || null,
+        destination: v.AIS?.DESTINATION || locode,
+        lat: v.AIS?.LATITUDE,
+        lng: v.AIS?.LONGITUDE,
+        speed: v.AIS?.SPEED,
+        course: v.AIS?.COURSE,
+        lastPort: v.VOYAGE?.LASTPORT || null,
+        lastCountry: v.VOYAGE?.LASTCOUNTRY || null,
+        departure: v.VOYAGE?.DEPARTURE || null,
+        port: locode,
+        simulated: false,
+        source: 'vesselfinder'
+      }));
+      return Response.json({
+        data: arrivals,
+        simulated: false,
+        source: 'vesselfinder',
+        port: locode,
+        count: arrivals.length
+      }, { headers: corsHeaders });
+    }
+  } catch (e) {
+    console.error('VesselFinder API error:', e);
+  }
+
   return Response.json({
     data: generateSimulatedFerries(),
     simulated: true,
     source: 'fallback',
-    note: 'VesselFinder requires API key'
+    note: 'VesselFinder API call failed. Using simulated data.'
   }, { headers: corsHeaders });
 }
 

@@ -211,20 +211,39 @@ function processRailData(railResp, hub) {
 function processFerryData(ferryResp, hub) {
   if (!ferryResp || !ferryResp.data) return [];
   return ferryResp.data
-    .filter(f => {
-      const hubName = hub.name.toLowerCase();
-      if (hubName.includes('dublin port')) return f.port?.includes('Dublin');
-      if (hubName.includes('ringaskiddy')) return f.port?.includes('Ringaskiddy');
-      return false;
+    .map(f => {
+      // Calculate minutes until ETA
+      let etaMinutes = null;
+      if (f.eta) {
+        const etaDate = new Date(f.eta);
+        etaMinutes = Math.round((etaDate - Date.now()) / 60000);
+      } else if (f.etaAIS) {
+        // Parse AIS ETA format "MM-DD HH:MM" — assume current year
+        const now = new Date();
+        const parts = f.etaAIS.split(' ');
+        if (parts.length === 2) {
+          const [monthDay, time] = parts;
+          const [month, day] = monthDay.split('-').map(Number);
+          const [hour, min] = time.split(':').map(Number);
+          const etaDate = new Date(now.getFullYear(), month - 1, day, hour, min);
+          etaMinutes = Math.round((etaDate - Date.now()) / 60000);
+        }
+      }
+      return {
+        mode: 'ferry',
+        name: f.name || 'Unknown Vessel',
+        origin: f.lastPort || f.origin || 'Unknown',
+        operator: 'Unknown',
+        etaMinutes: etaMinutes != null ? etaMinutes : 60,
+        eta: f.eta || null,
+        mmsi: f.mmsi || null,
+        imo: f.imo || null,
+        speed: f.speed || null,
+        simulated: f.simulated || false,
+        source: ferryResp.source || 'fallback'
+      };
     })
-    .map(f => ({
-      mode: 'ferry',
-      origin: f.origin || 'Unknown',
-      operator: f.operator || 'Unknown',
-      etaMinutes: f.eta ? Math.round((new Date(f.eta) - Date.now()) / 60000) : 60,
-      simulated: f.simulated || false,
-      source: ferryResp.source || 'fallback'
-    }));
+    .filter(f => f.etaMinutes > 0); // Only future arrivals
 }
 
 function processWeatherData(weatherResp) {
@@ -367,8 +386,7 @@ export class TurasResearcher {
       flightResp = await fetchFromWorker('/api/flights', { city: primaryRegion });
     }
 
-    // Fetch ferries
-    const ferryResp = await fetchFromWorker('/api/ferries');
+    // Fetch ferries — done per-hub inside the loop below (each port has different arrivals)
 
     for (const hub of hubsInRange) {
       const rand = seededRandom(`${hub.hubId}-${generatedAt.slice(0, 13)}`);
@@ -387,7 +405,8 @@ export class TurasResearcher {
         arrivals.push(...railArrivals);
       }
 
-      if (hub.modes.includes('ferry') && ferryResp) {
+      if (hub.modes.includes('ferry')) {
+        const ferryResp = await fetchFromWorker('/api/ferries', { port: hub.hubId });
         const ferryArrivals = processFerryData(ferryResp, hub);
         arrivals.push(...ferryArrivals);
       }
