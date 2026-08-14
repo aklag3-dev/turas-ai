@@ -1154,7 +1154,7 @@
         <div class="config-title">Search Configuration</div>
         <div class="config-grid">
           <div class="dropdown-group" id="city-group">
-            <span class="dropdown-label">Demo City</span>
+            <span class="dropdown-label">City</span>
             <select id="city-select" class="city-select" onchange="onCitySelectChange()">
               <option value="dublin">Dublin</option>
               <option value="cork">Cork</option>
@@ -1527,7 +1527,7 @@
       }
 
       document.getElementById('gps-btn').classList.add('active');
-      document.getElementById('city-group').classList.add('hidden');
+        document.getElementById('city-select').disabled = true;
       state.locationMode = 'gps';
 
       navigator.geolocation.getCurrentPosition(
@@ -1543,13 +1543,38 @@
               <div>Set your platform and search radius, then click <strong>"Begin Search"</strong> to find nearby transit hubs.</div>
             </div>
           `;
+          // Reverse-geocode the GPS position into the city selector via Photon
+          try {
+            const geoRes = await fetch(`https://photon.komoot.io/reverse?lat=${position.coords.latitude}&lon=${position.coords.longitude}`);
+            const geoData = await geoRes.json();
+            const f = geoData.features && geoData.features[0];
+            const city = f ? (f.properties.city || f.properties.name || '') : '';
+            const select = document.getElementById('city-select');
+            if (city) {
+              const existing = Array.from(select.options).find(opt => opt.text.toLowerCase() === city.toLowerCase());
+              if (existing) {
+                select.value = existing.value;
+              } else {
+                const opt = document.createElement('option');
+                opt.value = city;
+                opt.text = city;
+                select.appendChild(opt);
+                select.value = city;
+              }
+            }
+            select.disabled = false;
+          } catch (err) {
+            console.warn('Reverse geocoding failed:', err);
+            document.getElementById('city-select').disabled = false;
+          }
         },
         (error) => {
-          alert('Unable to get location: ' + error.message);
-          document.getElementById('gps-btn').classList.remove('active');
-          document.getElementById('city-group').classList.remove('hidden');
-          state.locationMode = 'demo';
-          placeDemoDriver();
+                        alert('Unable to get location: ' + error.message);
+                        document.getElementById('gps-btn').classList.remove('active');
+                        document.getElementById('city-group').classList.remove('hidden');
+                        document.getElementById('city-select').disabled = false;
+                        state.locationMode = 'demo';
+                        placeDemoDriver();
         }
       );
     };
