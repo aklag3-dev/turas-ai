@@ -372,7 +372,7 @@ async function handleTransit(request, corsHeaders) {
 const FERRY_PORT_LOCODES = {
   'IE-FRY-DUB': 'IEDUB',  // Dublin Port
   'IE-FRY-DUN': 'IEDLR',  // Dún Laoghaire
-  'IE-FRY-ROS': 'IE ROS', // Rosslare Europort
+  'IE-FRY-ROS': 'IEROS', // Rosslare Europort
   'IE-FRY-WAT': 'IEWAT',  // Waterford
   'IE-FRY-RIN': 'IERING', // Ringaskiddy (Cork)
   'IE-FRY-COB': 'IECOB',  // Cobh
@@ -419,7 +419,7 @@ function formatVesselApiInbound(vesselEta, hubId) {
   }
 
   return {
-    name: vesselEta.vesselName || 'Unknown Vessel',
+    name: vesselEta.vesselName || vesselEta.vessel_name || vesselEta.name || vesselEta.shipName || 'Unknown Vessel',
     mmsi: vesselEta.mmsi || null,
     imo: vesselEta.imo || null,
     destination: vesselEta.destinationPort || hubId,
