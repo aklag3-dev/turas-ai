@@ -318,6 +318,12 @@
       color: white;
       border-color: var(--green);
     }
+
+    .location-btn.demo-active {
+      background: var(--blue, #3b82f6);
+      color: white;
+      border-color: var(--blue, #3b82f6);
+    }
     
     .theme-toggle {
       padding: 0.5rem;
@@ -1133,6 +1139,7 @@
     </div>
     <div class="header-right">
       <button class="location-btn" id="gps-btn" onclick="requestGPS()">📍 Allow GPS</button>
+      <button class="location-btn demo-active" id="demo-btn" onclick="switchToDemo()">🏙️ Demo Mode</button>
       <div class="status-led" id="status-led">
         <div class="status-tooltip" id="status-tooltip">
           <div class="tooltip-title">System Status</div>
@@ -1537,6 +1544,7 @@
 
       document.getElementById('gps-btn').classList.add('active');
       document.getElementById('gps-btn').textContent = '📍 GPS Active';
+      document.getElementById('demo-btn').classList.remove('demo-active');
       document.getElementById('city-select').disabled = true;
       state.locationMode = 'gps';
 
@@ -1584,6 +1592,7 @@
                         alert('Unable to get location: ' + error.message);
                         document.getElementById('gps-btn').classList.remove('active');
                         document.getElementById('gps-btn').textContent = '📍 Allow GPS';
+                        document.getElementById('demo-btn').classList.add('demo-active');
                         document.getElementById('city-group').classList.remove('hidden');
                         document.getElementById('city-select').disabled = false;
                         state.locationMode = 'demo';
@@ -1616,6 +1625,35 @@
       updateDriverMarker(lat, lng);
       state.map.setView([lat, lng], 13);
     }
+
+    // ─── Switch to Demo Mode ───
+    window.switchToDemo = async function() {
+      state.locationMode = 'demo';
+      state.driverCoords = null;
+
+      // Reset GPS button
+      const gpsBtn = document.getElementById('gps-btn');
+      gpsBtn.classList.remove('active');
+      gpsBtn.textContent = '📍 Allow GPS';
+
+      // Activate demo button
+      const demoBtn = document.getElementById('demo-btn');
+      demoBtn.classList.add('demo-active');
+
+      // Re-enable city selector
+      document.getElementById('city-select').disabled = false;
+      document.getElementById('city-group').classList.remove('hidden');
+
+      // Place demo driver and update welcome message
+      await placeDemoDriver();
+      document.getElementById('hub-list').innerHTML = `
+        <div style="text-align:center;padding:2rem;color:var(--text-muted);">
+          <div style="font-size:2rem;margin-bottom:1rem;">🏙️</div>
+          <div style="font-weight:600;margin-bottom:0.5rem;color:var(--text-primary);">Demo Mode Active</div>
+          <div>Select a city, set your platform and radius, then click <strong>"Begin Search"</strong> to explore transit hubs.</div>
+        </div>
+      `;
+    };
 
     // ─── Hub List Rendering ───
     function renderHubList(matrix) {
