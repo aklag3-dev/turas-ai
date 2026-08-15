@@ -1800,10 +1800,13 @@
         if (marker) {
           const el = marker.getElement();
           if (el) {
-            el.querySelector('div').classList.add('hub-marker-highlight');
-            setTimeout(() => {
-              el.querySelector('div').classList.remove('hub-marker-highlight');
-            }, 1000);
+            const div = el.querySelector('div');
+            if (div) {
+              div.classList.add('hub-marker-highlight');
+              setTimeout(() => {
+                div.classList.remove('hub-marker-highlight');
+              }, 1000);
+            }
           }
         }
 
