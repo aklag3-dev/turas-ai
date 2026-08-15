@@ -212,13 +212,13 @@ function processFerryData(ferryResp, hub) {
   if (!ferryResp || !ferryResp.data) return [];
   return ferryResp.data
     .map(f => {
-      // Calculate minutes until ETA
-      let etaMinutes = null;
-      if (f.eta) {
+      // Use etaMinutes directly if provided (AISStream), otherwise calculate from eta
+      let etaMinutes = f.etaMinutes;
+      if (etaMinutes == null && f.eta) {
         const etaDate = new Date(f.eta);
         etaMinutes = Math.round((etaDate - Date.now()) / 60000);
-      } else if (f.etaAIS) {
-        // Parse AIS ETA format "MM-DD HH:MM" — assume current year
+      }
+      if (etaMinutes == null && f.etaAIS) {
         const now = new Date();
         const parts = f.etaAIS.split(' ');
         if (parts.length === 2) {
@@ -232,13 +232,14 @@ function processFerryData(ferryResp, hub) {
       return {
         mode: 'ferry',
         name: f.name || 'Unknown Vessel',
-        origin: f.lastPort || f.origin || 'Unknown',
-        operator: 'Unknown',
+        origin: f.origin || 'Unknown',
+        operator: f.operator || 'Unknown',
         etaMinutes: etaMinutes != null ? etaMinutes : 60,
         eta: f.eta || null,
         mmsi: f.mmsi || null,
         imo: f.imo || null,
         speed: f.speed || null,
+        distanceNm: f.distanceNm || null,
         simulated: f.simulated || false,
         source: ferryResp.source || 'fallback'
       };

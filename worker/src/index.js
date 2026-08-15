@@ -367,87 +367,157 @@ async function handleTransit(request, corsHeaders) {
   }, { headers: corsHeaders });
 }
 
+// ─── VesselAPI for live ferry arrivals ───
 // Map hub IDs to UN/LOCODEs for Irish ferry ports
 const FERRY_PORT_LOCODES = {
-  'IE-FRY-ROS': 'IERSA',  // Rosslare Europort
-  'IE-FRY-RIN': 'IERIN',  // Ringaskiddy (Cork)
   'IE-FRY-DUB': 'IEDUB',  // Dublin Port
-  'IE-FRY-RSV': 'IERVA',  // Rossaveel
-  'IE-FRY-TAR': 'IETRB',  // Tarbert
-  'IE-FRY-GAL': 'IEGAL',  // Galway
-  'IE-FRY-DUN': 'IEDLG',  // Dún Laoghaire
-  'IE-FRY-COB': 'IECOB',  // Cobh
-  'IE-FRY-KLY': 'IEKLY',  // Killybegs
+  'IE-FRY-DUN': 'IEDLR',  // Dún Laoghaire
+  'IE-FRY-ROS': 'IE ROS', // Rosslare Europort
   'IE-FRY-WAT': 'IEWAT',  // Waterford
+  'IE-FRY-RIN': 'IERING', // Ringaskiddy (Cork)
+  'IE-FRY-COB': 'IECOB',  // Cobh
+  'IE-FRY-RSV': 'IERSS',  // Rossaveel
+  'IE-FRY-GAL': 'IEGAL',  // Galway
+  'IE-FRY-TAR': 'IETAR',  // Tarbert
+  'IE-FRY-KLY': 'IEKLY',  // Killybegs
 };
+
+// Cache for VesselAPI data
+let vesselApiCache = { data: null, timestamp: 0 };
+const VESSELAPI_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+// Fetch inbound vessels from VesselAPI
+async function fetchInboundVessels(apiKey, locode) {
+  try {
+    const response = await fetch(`https://api.vesselapi.com/v1/port/${locode}/inbound`, {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      console.error('VesselAPI error:', response.status, response.statusText);
+      return null;
+    }
+
+    const data = await response.json();
+    return data.vesselETAs || [];
+  } catch (e) {
+    console.error('VesselAPI fetch error:', e);
+    return null;
+  }
+}
+
+// Convert VesselAPI inbound vessel data to our format
+function formatVesselApiInbound(vesselEta, hubId) {
+  // Calculate ETA in minutes
+  let etaMinutes = null;
+  if (vesselEta.eta) {
+    const etaDate = new Date(vesselEta.eta);
+    etaMinutes = Math.round((etaDate - Date.now()) / 60000);
+  }
+
+  return {
+    name: vesselEta.vesselName || 'Unknown Vessel',
+    mmsi: vesselEta.mmsi || null,
+    imo: vesselEta.imo || null,
+    destination: vesselEta.destinationPort || hubId,
+    lat: null, // VesselAPI inbound doesn't include position
+    lng: null,
+    speed: null,
+    course: null,
+    heading: null,
+    eta: vesselEta.eta || null,
+    etaMinutes: etaMinutes,
+    port: hubId,
+    navStatus: null,
+    shipType: null,
+    simulated: false,
+    source: 'vesselapi'
+  };
+}
 
 async function handleFerries(request, env, corsHeaders) {
   const url = new URL(request.url);
   const port = url.searchParams.get('port');  // Hub ID (e.g., IE-FRY-DUB)
-  const interval = url.searchParams.get('interval') || '1440';  // Default: next 24 hours
 
-  const locode = FERRY_PORT_LOCODES[port];
-  if (!locode) {
-    return Response.json({
-      data: generateSimulatedFerries(),
-      simulated: true,
-      source: 'fallback',
-      note: `Unknown port: ${port}. Using simulated data.`
-    }, { headers: corsHeaders });
-  }
-
-  const apiKey = env.VESSELFINDER_API_KEY;
+  const apiKey = env.VESSELAPI_KEY;
   if (!apiKey) {
+    console.log('VesselAPI key not configured');
     return Response.json({
       data: generateSimulatedFerries(),
       simulated: true,
       source: 'fallback',
-      note: 'VesselFinder API key not configured. Using simulated data.'
+      note: 'VesselAPI key not configured. Using simulated data.'
     }, { headers: corsHeaders });
   }
 
   try {
-    const resp = await fetch(
-      `https://api.vesselfinder.com/expectedarrivals?userkey=${apiKey}&interval=${interval}&locode=${locode}&format=json`
-    );
-    if (resp.ok) {
-      const vessels = await resp.json();
-      const arrivals = vessels.map(v => ({
-        name: v.AIS?.NAME || 'Unknown',
-        mmsi: v.AIS?.MMSI,
-        imo: v.AIS?.IMO,
-        type: v.AIS?.TYPE,
-        eta: v.AIS?.ETA || null,
-        etaAIS: v.AIS?.ETA_AIS || null,
-        destination: v.AIS?.DESTINATION || locode,
-        lat: v.AIS?.LATITUDE,
-        lng: v.AIS?.LONGITUDE,
-        speed: v.AIS?.SPEED,
-        course: v.AIS?.COURSE,
-        lastPort: v.VOYAGE?.LASTPORT || null,
-        lastCountry: v.VOYAGE?.LASTCOUNTRY || null,
-        departure: v.VOYAGE?.DEPARTURE || null,
-        port: locode,
-        simulated: false,
-        source: 'vesselfinder'
-      }));
+    // If specific port requested, fetch just that port
+    if (port && FERRY_PORT_LOCODES[port]) {
+      const locode = FERRY_PORT_LOCODES[port];
+      console.log('Fetching inbound vessels for', port, '(', locode, ')');
+      
+      const vesselEtas = await fetchInboundVessels(apiKey, locode);
+      
+      if (!vesselEtas || vesselEtas.length === 0) {
+        return Response.json({
+          data: generateSimulatedFerries(),
+          simulated: true,
+          source: 'fallback',
+          note: `No live inbound data for ${port}. Using simulated data.`
+        }, { headers: corsHeaders });
+      }
+
+      const arrivals = vesselEtas
+        .map(v => formatVesselApiInbound(v, port))
+        .filter(a => a.etaMinutes !== null && a.etaMinutes > 0)
+        .sort((a, b) => a.etaMinutes - b.etaMinutes);
+
       return Response.json({
         data: arrivals,
         simulated: false,
-        source: 'vesselfinder',
-        port: locode,
+        source: 'vesselapi',
+        port: port,
         count: arrivals.length
       }, { headers: corsHeaders });
     }
+
+    // If no port specified or invalid port, fetch all Irish ports
+    console.log('Fetching inbound vessels for all Irish ferry ports');
+    const allArrivals = [];
+
+    for (const [hubId, locode] of Object.entries(FERRY_PORT_LOCODES)) {
+      const vesselEtas = await fetchInboundVessels(apiKey, locode);
+      if (vesselEtas) {
+        const arrivals = vesselEtas
+          .map(v => formatVesselApiInbound(v, hubId))
+          .filter(a => a.etaMinutes !== null && a.etaMinutes > 0);
+        allArrivals.push(...arrivals);
+      }
+    }
+
+    // Sort by ETA
+    allArrivals.sort((a, b) => a.etaMinutes - b.etaMinutes);
+
+    return Response.json({
+      data: allArrivals,
+      simulated: false,
+      source: 'vesselapi',
+      port: 'all',
+      count: allArrivals.length
+    }, { headers: corsHeaders });
+
   } catch (e) {
-    console.error('VesselFinder API error:', e);
+    console.error('VesselAPI error:', e);
   }
 
   return Response.json({
     data: generateSimulatedFerries(),
     simulated: true,
     source: 'fallback',
-    note: 'VesselFinder API call failed. Using simulated data.'
+    note: 'VesselAPI call failed. Using simulated data.'
   }, { headers: corsHeaders });
 }
 
