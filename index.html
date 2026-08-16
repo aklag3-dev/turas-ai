@@ -1998,15 +1998,15 @@ function renderArrivalsDrawer() {
 
     if (arrivals.length > 0) {
       html += `<table class="arrivals-table">
-        <thead><tr><th>Flight/Service</th><th>Airline</th><th>Scheduled</th><th>Status</th><th>Terminal</th></tr></thead>
+        <thead><tr><th>Mode</th><th>Origin / Service</th><th>ETA</th><th>Source</th></tr></thead>
         <tbody>`;
       arrivals.forEach(a => {
-        const sched = a.scheduled ? new Date(a.scheduled).toLocaleTimeString('en-IE', { hour: '2-digit', minute: '2-digit' }) : '--';
-        const status = a.status || '--';
-        const terminal = a.terminal || '--';
-        const flightNum = a.flightNumber || '--';
-        const airline = a.airline || '--';
-        html += `<tr><td>${flightNum}</td><td>${airline}</td><td>${sched}</td><td>${status}</td><td>${terminal}</td></tr>`;
+        const mode = (a.mode || 'transit').charAt(0).toUpperCase() + (a.mode || 'transit').slice(1);
+        const origin = a.origin || a.flightNumber || 'Scheduled Arrival';
+        const eta = a.etaMinutes != null ? (a.etaMinutes >= 0 ? a.etaMinutes + ' min' : 'Arrived') : '--';
+        const source = a.simulated ? 'simulated' : (a.source || 'live');
+        const sourceColor = a.simulated ? 'var(--text-muted)' : 'var(--green)';
+        html += `<tr><td>${mode}</td><td><strong>${origin}</strong></td><td>${eta}</td><td style="color:${sourceColor};">${source}</td></tr>`;
       });
       html += `</tbody></table>`;
     } else {
