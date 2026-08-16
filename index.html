@@ -324,6 +324,12 @@
       color: white;
       border-color: var(--blue, #3b82f6);
     }
+
+    .location-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
     
     .theme-toggle {
       padding: 0.5rem;
@@ -890,6 +896,111 @@
       display: flex;
     }
 
+    /* ─── Arrivals Drawer (Right Side) ─── */
+    .arrivals-drawer {
+      position: fixed;
+      top: 60px;
+      right: 0;
+      width: 480px;
+      height: calc(100vh - 60px);
+      background: var(--bg-secondary);
+      border-left: 1px solid var(--border);
+      display: none;
+      flex-direction: column;
+      overflow-y: auto;
+      z-index: 1002;
+      animation: slideInRight 0.3s ease;
+      box-shadow: -4px 0 16px var(--shadow);
+    }
+
+    .arrivals-drawer.open {
+      display: flex;
+    }
+
+    .arrivals-drawer-header {
+      padding: 1rem 1.25rem;
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .arrivals-drawer-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1.2;
+    }
+
+    .arrivals-drawer-meta {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+    }
+
+    .arrivals-drawer-close {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 0.25rem;
+      line-height: 1;
+    }
+
+    .arrivals-drawer-close:hover {
+      color: var(--text-primary);
+    }
+
+    .arrivals-drawer-content {
+      padding: 1rem 1.25rem;
+      flex: 1;
+    }
+
+    .arrivals-hub-section {
+      margin-bottom: 1.5rem;
+    }
+
+    .arrivals-hub-name {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .arrivals-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.75rem;
+    }
+
+    .arrivals-table th, .arrivals-table td {
+      padding: 0.375rem 0.5rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .arrivals-table th {
+      background: var(--bg-tertiary);
+      font-weight: 600;
+      color: var(--text-secondary);
+      position: sticky;
+      top: 0;
+    }
+
+    .arrivals-empty {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+
     .drawer-header {
       padding: 1rem 1.25rem;
       background: var(--bg-tertiary);
@@ -1140,7 +1251,7 @@
     <div class="header-right">
       <button class="location-btn" id="gps-btn" onclick="requestGPS()">📍 Allow GPS</button>
       <button class="location-btn demo-active" id="demo-btn" onclick="switchToDemo()">🏙️ Demo Mode</button>
-        <button class="location-btn" id="arrivals-btn" onclick="toggleArrivalsDrawer()">🚆 Show Arrivals</button>
+      <button class="location-btn" id="arrivals-btn" onclick="toggleArrivalsDrawer()" disabled>🚆 Show Arrivals</button>
       <div class="status-led" id="status-led">
         <div class="status-tooltip" id="status-tooltip">
           <div class="tooltip-title">System Status</div>
@@ -1249,6 +1360,20 @@
       </div>
       <div class="drawer-content" id="drawer-content">
         <!-- Populated dynamically on hub card click -->
+      </div>
+    </div>
+
+    <!-- Arrivals Drawer (Right Side - All Hub Arrivals) -->
+    <div class="arrivals-drawer" id="arrivals-drawer">
+      <div class="arrivals-drawer-header">
+        <div>
+          <div class="arrivals-drawer-title">🚆 Live Arrivals</div>
+          <div class="arrivals-drawer-meta" id="arrivals-drawer-meta">All transit hubs in search area</div>
+        </div>
+        <button class="arrivals-drawer-close" onclick="closeArrivalsDrawer()">×</button>
+      </div>
+      <div class="arrivals-drawer-content" id="arrivals-drawer-content">
+        <!-- Populated dynamically after search -->
       </div>
     </div>
 
@@ -1760,23 +1885,22 @@ topHubId: matrix.summary?.topHubId ?? null,
       state.markers = {};
 
       matrix.hubs.forEach(hub => {
-        // Use grey for pre-search, otherwise use pFare color
         const markerColor = (hub.pFare === null || hub.pFare === undefined) ? '#94a3b8' : hub.pinColor;
 
         let svgPath;
         if ((hub.modes && hub.modes.includes('flight')) || /(air|ork|snn|dub)/.test(hub.hubId || '')) {
-          svgPath = 'M285-80v-83l124-86v-172L80-288v-102l329-231v-188q0-29 21-50t50-21q29 0 50 21t21 50v188l329 231v102L551-421v172l123 86v83l-194-59-195 59Z';
+          svgPath = 'M480-160q-12 0-22.5-4.5T440-178L180-420q-18-16-28-37.5T140-504q0-27 10-48.5t28-37.5l260-242q12-12 28.5-18t33.5-6q16 0 32.5 6t28.5 18l260 242q18 16 28 37.5t10 48.5q0 27-10 48.5T820-420L560-178q-7 9-17.5 13.5T480-160Zm0-80l260-242-260-242-260 242 260 242Zm0-120q-25 0-42.5-17.5T420-420q0-25 17.5-42.5T480-480q25 0 42.5 17.5T540-420q0 25-17.5 42.5T480-360Zm0-60Zm0 180Z';
         } else if ((hub.modes && hub.modes.includes('ferry')) || /(port|ferry)/.test(hub.hubId || '')) {
-          svgPath = 'M178-80h-58v-60h58q40 0 79-11t76-34q35 22 72 32.5t75 10.5q38 0 75-10.5t72-32.5q38 23 77.5 34t78.5 11h57v60h-57q-39 0-78-9t-77-28q-38 19-75 28t-73 9q-36 0-73-9.5T333-117q-38 18-77.5 27.5T178-80Zm226.5-169.5Q365-270 330-307q-33 33-71 52.5T182-230l-71-245q-4-12 2-22.5t18-14.5l55-16v-190q0-25 17.5-42.5T246-778h132v-103h204v103h132q25 0 42.5 17.5T774-718v190l55 16q12 4 18 14.5t2 22.5l-71 245q-39-5-77-24.5T630-307q-35 37-74.5 57.5T480-229q-36 0-75.5-20.5ZM481-289q32 0 58.5-18t47.5-43l41-48 36 38q16 17 34 31t38 25l48-159-304-92-304 92 48 159q20-11 38-25t34-31l36-38 41 48q22 25 49 43t59 18ZM246-547l234-71 234 72v-172H246v171Zm234 125Z';
+          svgPath = 'M220-200v-80h520v80H220Zm260-160q-33 0-56.5-23.5T400-440q0-33 23.5-56.5T480-520q33 0 56.5 23.5T560-440q0 33-23.5 56.5T480-360ZM140-480l80-200h520l80 200H140Zm160-80h360l-40-120H340l-40 120Zm180-200q-33 0-56.5-23.5T400-840q0-33 23.5-56.5T480-920q33 0 56.5 23.5T560-840q0 33-23.5 56.5T480-760Z';
         } else {
-          svgPath = 'M160-340v-380q0-41 19-71.5t58.5-50q39.5-19.5 100-29T480-880q86 0 146.5 9t99 28.5Q764-823 782-793t18 73v380q0 59-40.5 99.5T660-200l60 60v20h-70l-80-80H390l-80 80h-70v-20l60-60q-59 0-99.5-40.5T160-340Zm320-480q-120 0-173 15.5T231-760h501q-18-27-76.5-43.5T480-820zm220-545h234v-155H220v155Zm440 60H220h520-80Zm-146-60h226v-155H514v155ZM374-331q16-16 16-39t-16-39q-16-16-39-16t-39 16q-16 16-16 39t16 39q16 16 39 16t39-16Zm290 0q16-16 16-39t-16-39q-16-16-39-16t-39 16q-16 16-16 39t16 39q16 16 39 16t39-16Zm-364 76h360q34 0 57-25t23-60v-145H220v145q0 35 23 60t57 25Zm180-505h252-501 249Z';
+          svgPath = 'M180-160v-80h600v80H180Zm120-200v-400h360v400H300Zm80-80h200v-240H380v240Zm-200-400v-80h600v80H180Zm200 400v-240h200v240H380Zm0-240Z';
         }
 
         const marker = L.marker([hub.lat, hub.lng], {
           icon: L.divIcon({
             className: 'custom-marker',
-            html: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 -960 960 960"><path fill="${markerColor}" d="${svgPath}"/></svg>`,
-            iconSize: [24, 24]
+            html: `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 -960 960 960"><path fill="${markerColor}" d="${svgPath}"/></svg>`,
+            iconSize: [36, 36]
           })
         }).addTo(state.map);
         marker.on('click', () => { marker.closePopup(); selectHub(hub.hubId); });
@@ -1833,19 +1957,68 @@ window.closeHubDetailDrawer = function() {
 };
 
 window.toggleArrivalsDrawer = function() {
-  const drawer = document.getElementById('hub-detail-drawer');
+  const drawer = document.getElementById('arrivals-drawer');
   if (!drawer) return;
   if (drawer.classList.contains('open')) {
     drawer.classList.remove('open');
     return;
   }
-  const hub = state.matrix?.hubs?.find(h => h.hubId === state.selectedHub);
-  if (!hub) {
+  renderArrivalsDrawer();
+};
+
+window.closeArrivalsDrawer = function() {
+  const drawer = document.getElementById('arrivals-drawer');
+  if (drawer) drawer.classList.remove('open');
+};
+
+function renderArrivalsDrawer() {
+  const drawer = document.getElementById('arrivals-drawer');
+  const content = document.getElementById('arrivals-drawer-content');
+  const meta = document.getElementById('arrivals-drawer-meta');
+  if (!drawer || !content) return;
+
+  const hubs = state.matrix?.hubs || [];
+  if (hubs.length === 0) {
+    content.innerHTML = '<div class="arrivals-empty">No hubs in search area. Click <strong>Begin Search</strong> to find transit hubs.</div>';
+    meta.textContent = 'No active search';
     drawer.classList.add('open');
     return;
   }
-  renderHubDetailDrawer(hub);
-};
+
+  let totalArrivals = 0;
+  let html = '';
+
+  hubs.forEach(hub => {
+    const arrivals = hub.arrivals || [];
+    totalArrivals += arrivals.length;
+    const modeIcon = hub.modes?.includes('flight') ? '✈️' : hub.modes?.includes('ferry') ? '⛴️' : '🚆';
+
+    html += `<div class="arrivals-hub-section">
+      <div class="arrivals-hub-name">${modeIcon} ${hub.name || 'Transit Hub'} (${arrivals.length} arrivals)</div>`;
+
+    if (arrivals.length > 0) {
+      html += `<table class="arrivals-table">
+        <thead><tr><th>Flight/Service</th><th>Airline</th><th>Scheduled</th><th>Status</th><th>Terminal</th></tr></thead>
+        <tbody>`;
+      arrivals.forEach(a => {
+        const sched = a.scheduled ? new Date(a.scheduled).toLocaleTimeString('en-IE', { hour: '2-digit', minute: '2-digit' }) : '--';
+        const status = a.status || '--';
+        const terminal = a.terminal || '--';
+        const flightNum = a.flightNumber || '--';
+        const airline = a.airline || '--';
+        html += `<tr><td>${flightNum}</td><td>${airline}</td><td>${sched}</td><td>${status}</td><td>${terminal}</td></tr>`;
+      });
+      html += `</tbody></table>`;
+    } else {
+      html += `<div class="arrivals-empty">No active arrivals</div>`;
+    }
+    html += `</div>`;
+  });
+
+  content.innerHTML = html;
+  meta.textContent = `${hubs.length} hubs · ${totalArrivals} total arrivals`;
+  drawer.classList.add('open');
+}
 
 function renderHubDetailDrawer(hub) {
       const drawer = document.getElementById('hub-detail-drawer');
@@ -2155,6 +2328,10 @@ function renderHubDetailDrawer(hub) {
       btn.disabled = true;
       btn.classList.remove('searched');
       btn.textContent = 'Searching...';
+
+      // Enable arrivals button now that search is active
+      const arrivalsBtn = document.getElementById('arrivals-btn');
+      if (arrivalsBtn) arrivalsBtn.disabled = false;
 
       // Reset progress panel & show top processing banner
       resetProgressPanel();
