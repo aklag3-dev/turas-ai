@@ -1430,7 +1430,7 @@
       sessionId: crypto.randomUUID(),
       city: localStorage.getItem('turas_city') || 'dublin',
       platform: localStorage.getItem('turas_platform') || 'freenow',
-      radiusKm: parseInt(localStorage.getItem('turas_radius') || '25'),
+      radiusKm: parseInt(localStorage.getItem('turas_radius') || '10'),
       selectedHub: null,
       matrix: null,
       brief: null,
@@ -1593,9 +1593,9 @@ topHubId: matrix.summary?.topHubId ?? null,
           draggable: true,
             icon: L.divIcon({
               className: 'driver-marker-wrapper',
-              html: '<img src="img/map-car.svg" style="width:32px;height:32px;" alt="Car">',
-              iconSize: [32, 32],
-              iconAnchor: [16, 16]
+              html: '<img src="img/map-car.svg" style="width:16px;height:16px;" alt="Car">',
+              iconSize: [16, 16],
+              iconAnchor: [8, 8]
             })
         }).addTo(state.map);
         state.driverMarker.bindPopup('Your location (drag or click map to move)');
@@ -1899,9 +1899,9 @@ topHubId: matrix.summary?.topHubId ?? null,
         const marker = L.marker([hub.lat, hub.lng], {
           icon: L.divIcon({
             className: 'custom-marker',
-            html: `<img src="${iconUrl}" style="width:36px;height:36px;" alt="${hub.name}">`,
-            iconSize: [36, 36],
-            iconAnchor: [18, 18]
+            html: `<img src="${iconUrl}" style="width:18px;height:18px;" alt="${hub.name}">`,
+            iconSize: [18, 18],
+            iconAnchor: [9, 9]
           })
         }).addTo(state.map);
         marker.on('click', () => { marker.closePopup(); selectHub(hub.hubId); });
