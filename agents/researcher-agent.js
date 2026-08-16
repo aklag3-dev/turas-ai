@@ -304,7 +304,7 @@ export class TurasResearcher {
     const {
       driverCoords = null,
       radiusKm = 10,
-      platform = 'freenow',
+      platform = 'independent',
       mode = 'stationary',
       sessionId
     } = config;

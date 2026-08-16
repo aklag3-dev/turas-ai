@@ -1291,7 +1291,7 @@
             <span class="dropdown-label">Primary Platform</span>
             <select id="platform-select" class="platform-select" onchange="onConfigChange()">
               <option value="freenow">FreeNow</option>
-              <option value="independent">Independent Taxi</option>
+              <option value="independent" selected>Independent Taxi</option>
               <option value="uber">Uber</option>
               <option value="bolt">Bolt</option>
             </select>
@@ -1429,7 +1429,7 @@
     const state = {
       sessionId: crypto.randomUUID(),
       city: localStorage.getItem('turas_city') || 'dublin',
-      platform: localStorage.getItem('turas_platform') || 'freenow',
+      platform: localStorage.getItem('turas_platform') || 'independent',
       radiusKm: parseInt(localStorage.getItem('turas_radius') || '10'),
       selectedHub: null,
       matrix: null,
