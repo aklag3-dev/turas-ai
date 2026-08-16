@@ -1593,8 +1593,9 @@ topHubId: matrix.summary?.topHubId ?? null,
           draggable: true,
             icon: L.divIcon({
               className: 'driver-marker-wrapper',
-              html: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 -960 960 960"><path fill="#3b82f6" d="M200-204v54q0 12.75-8.62 21.37Q182.75-120 170-120h-20q-12.75 0-21.37-8.63Q120-137.25 120-150v-324l85-256q5-14 16.5-22t26.5-8h464q15 0 26.5 8t16.5 22l85 256v324q0 12.75-8.62 21.37Q822.75-120 810-120h-21q-13 0-21-8.63-8-8.62-8-21.37v-54H200Zm3-330h554l-55-166H258l-55 166Zm-23 60v210-210Zm105.76 160q23.24 0 38.74-15.75Q340-345.5 340-368q0-23.33-15.75-39.67Q308.5-424 286-424q-23.33 0-39.67 16.26Q230-391.47 230-368.24q0 23.24 16.26 38.74 16.27 15.5 39.5 15.5ZM675-314q23.33 0 39.67-15.75Q731-345.5 731-368q0-23.33-16.26-39.67Q698.47-424 675.24-424q-23.24 0-38.74 16.26-15.5 16.27-15.5 39.5 0 23.24 15.75 38.74Q652.5-314 675-314Zm-495 50h600v-210H180v210Z"/></svg>',
-              iconSize: [20, 20]
+              html: '<img src="img/map-car.svg" style="width:32px;height:32px;" alt="Car">',
+              iconSize: [32, 32],
+              iconAnchor: [16, 16]
             })
         }).addTo(state.map);
         state.driverMarker.bindPopup('Your location (drag or click map to move)');
@@ -1885,22 +1886,22 @@ topHubId: matrix.summary?.topHubId ?? null,
       state.markers = {};
 
       matrix.hubs.forEach(hub => {
-        const markerColor = (hub.pFare === null || hub.pFare === undefined) ? '#94a3b8' : hub.pinColor;
-
-        let svgPath;
-        if ((hub.modes && hub.modes.includes('flight')) || /(air|ork|snn|dub)/.test(hub.hubId || '')) {
-          svgPath = 'M480-160q-12 0-22.5-4.5T440-178L180-420q-18-16-28-37.5T140-504q0-27 10-48.5t28-37.5l260-242q12-12 28.5-18t33.5-6q16 0 32.5 6t28.5 18l260 242q18 16 28 37.5t10 48.5q0 27-10 48.5T820-420L560-178q-7 9-17.5 13.5T480-160Zm0-80l260-242-260-242-260 242 260 242Zm0-120q-25 0-42.5-17.5T420-420q0-25 17.5-42.5T480-480q25 0 42.5 17.5T540-420q0 25-17.5 42.5T480-360Zm0-60Zm0 180Z';
-        } else if ((hub.modes && hub.modes.includes('ferry')) || /(port|ferry)/.test(hub.hubId || '')) {
-          svgPath = 'M220-200v-80h520v80H220Zm260-160q-33 0-56.5-23.5T400-440q0-33 23.5-56.5T480-520q33 0 56.5 23.5T560-440q0 33-23.5 56.5T480-360ZM140-480l80-200h520l80 200H140Zm160-80h360l-40-120H340l-40 120Zm180-200q-33 0-56.5-23.5T400-840q0-33 23.5-56.5T480-920q33 0 56.5 23.5T560-840q0 33-23.5 56.5T480-760Z';
+        const isPreSearch = hub.pFare === null || hub.pFare === undefined;
+        let iconUrl;
+        if (hub.modes && hub.modes.includes('flight')) {
+          iconUrl = isPreSearch ? 'img/map-airport-default.svg' : 'img/map-airport-search.svg';
+        } else if (hub.modes && hub.modes.includes('ferry')) {
+          iconUrl = isPreSearch ? 'img/map-ferryport-default.svg' : 'img/map-ferryport-search.svg';
         } else {
-          svgPath = 'M180-160v-80h600v80H180Zm120-200v-400h360v400H300Zm80-80h200v-240H380v240Zm-200-400v-80h600v80H180Zm200 400v-240h200v240H380Zm0-240Z';
+          iconUrl = isPreSearch ? 'img/map-trainstation-default.svg' : 'img/map-trainstation-search.svg';
         }
 
         const marker = L.marker([hub.lat, hub.lng], {
           icon: L.divIcon({
             className: 'custom-marker',
-            html: `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 -960 960 960"><path fill="${markerColor}" d="${svgPath}"/></svg>`,
-            iconSize: [36, 36]
+            html: `<img src="${iconUrl}" style="width:36px;height:36px;" alt="${hub.name}">`,
+            iconSize: [36, 36],
+            iconAnchor: [18, 18]
           })
         }).addTo(state.map);
         marker.on('click', () => { marker.closePopup(); selectHub(hub.hubId); });
