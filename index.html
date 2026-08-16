@@ -1140,6 +1140,7 @@
     <div class="header-right">
       <button class="location-btn" id="gps-btn" onclick="requestGPS()">📍 Allow GPS</button>
       <button class="location-btn demo-active" id="demo-btn" onclick="switchToDemo()">🏙️ Demo Mode</button>
+        <button class="location-btn" id="arrivals-btn" onclick="toggleArrivalsDrawer()">🚆 Show Arrivals</button>
       <div class="status-led" id="status-led">
         <div class="status-tooltip" id="status-tooltip">
           <div class="tooltip-title">System Status</div>
@@ -1282,11 +1283,23 @@
     </div>
   </div>
 
-  <script type="module">
-    import { TurasResearcher } from './agents/researcher-agent.js';
-    import { TurasDesigner } from './agents/designer-agent.js';
+<script type="module">
+      let TurasResearcher = null;
+      let TurasDesigner = null;
 
-    const WORKER_URL = 'https://turas-ai-proxy.symphony-driver-assist.workers.dev';
+      async function loadAgents() {
+        try {
+          const researcherMod = await import('./agents/researcher-agent.js');
+          TurasResearcher = researcherMod.TurasResearcher;
+          const designerMod = await import('./agents/designer-agent.js');
+          TurasDesigner = designerMod.TurasDesigner;
+        } catch (err) {
+          console.warn('[Turas AI] Agent modules unavailable, running in standalone demo mode.', err);
+        }
+      }
+      loadAgents();
+
+      const WORKER_URL = 'https://turas-ai-proxy.symphony-driver-assist.workers.dev';
 
     const state = {
       sessionId: crypto.randomUUID(),
@@ -1339,12 +1352,12 @@
             hubId: hub.hubId,
             name: hub.name,
             pFare: hub.pFare,
-            pinColor: hub.pinColor,
-            rank: hub.rank,
-            nPax: hub.nPax,
-            arrivals: hub.arrivals.length,
-            rationale: hub.rationale
-          }
+pinColor: hub.pinColor ?? null,
+      rank: hub.rank ?? null,
+      nPax: hub.nPax,
+      arrivals: (hub.arrivals || []).length,
+      rationale: hub.rationale ?? null
+    }
         }))
       };
 
@@ -1355,10 +1368,10 @@
         platform: state.platform,
         driverCoords: driverCoords ? { lat: driverCoords.lat, lng: driverCoords.lng } : null,
         selectedHub: state.selectedHub,
-        topHubId: matrix.summary.topHubId,
-        topPFare: matrix.summary.topPFare,
-        hubCount: matrix.hubs.length,
-        avgPFare: matrix.summary.avgPFare
+topHubId: matrix.summary?.topHubId ?? null,
+    topPFare: matrix.summary?.topPFare ?? null,
+    hubCount: matrix.hubs.length,
+    avgPFare: matrix.summary?.avgPFare ?? null
       };
 
       const botContext = {
@@ -1814,12 +1827,27 @@
       }
     };
 
-    window.closeHubDetailDrawer = function() {
-      const drawer = document.getElementById('hub-detail-drawer');
-      if (drawer) drawer.classList.remove('open');
-    };
+window.closeHubDetailDrawer = function() {
+  const drawer = document.getElementById('hub-detail-drawer');
+  if (drawer) drawer.classList.remove('open');
+};
 
-    function renderHubDetailDrawer(hub) {
+window.toggleArrivalsDrawer = function() {
+  const drawer = document.getElementById('hub-detail-drawer');
+  if (!drawer) return;
+  if (drawer.classList.contains('open')) {
+    drawer.classList.remove('open');
+    return;
+  }
+  const hub = state.matrix?.hubs?.find(h => h.hubId === state.selectedHub);
+  if (!hub) {
+    drawer.classList.add('open');
+    return;
+  }
+  renderHubDetailDrawer(hub);
+};
+
+function renderHubDetailDrawer(hub) {
       const drawer = document.getElementById('hub-detail-drawer');
       if (!drawer) return;
 
@@ -2408,6 +2436,64 @@
     }
 
     // ─── Main Pipeline ───
+    async function buildDemoBrief(driverCoords) {
+      const demoHubs = [
+        {
+          hubId: 'demo-airport',
+          name: 'Dublin Airport (Demo)',
+          lat: 53.4213,
+          lng: -6.2701,
+          modes: ['flight'],
+          weather: { precipMmHr: 0, tempC: 10 },
+          arrivals: [],
+          pFare: null,
+          distanceKm: 10.2,
+          drivingTimeMin: 25,
+          eta: null,
+          nPax: 0,
+          preSearch: true
+        },
+        {
+          hubId: 'demo-port',
+          name: 'Dublin Port (Demo)',
+          lat: 53.3498,
+          lng: -6.2603,
+          modes: ['ferry'],
+          weather: { precipMmHr: 0, tempC: 12 },
+          arrivals: [],
+          pFare: null,
+          distanceKm: 4.5,
+          drivingTimeMin: 15,
+          eta: null,
+          nPax: 0,
+          preSearch: true
+        },
+        {
+          hubId: 'demo-rail',
+          name: 'Connolly Station (Demo)',
+          lat: 53.3494,
+          lng: -6.2602,
+          modes: ['rail'],
+          weather: { precipMmHr: 0, tempC: 12 },
+          arrivals: [],
+          pFare: null,
+          distanceKm: 3.1,
+          drivingTimeMin: 12,
+          eta: null,
+          nPax: 0,
+          preSearch: true
+        }
+      ];
+      return {
+        generatedAt: new Date().toISOString(),
+        sessionId: state.sessionId,
+        driverCoords: driverCoords,
+        radiusKm: state.radiusKm,
+        hubs: demoHubs,
+        preSearch: true
+      };
+    }
+
     async function runPipeline() {
       try {
         updateStatusLED('live');
@@ -2420,16 +2506,23 @@
           driverCoords = { lat: coords[0], lng: coords[1] };
         }
         
-        const researcher = new TurasResearcher();
-        state.brief = await researcher.collect({
-          driverCoords,
-          radiusKm: state.radiusKm,
-          platform: state.platform,
-          sessionId: state.sessionId
-        });
-
-        const designer = new TurasDesigner(state.brief);
-        state.matrix = await designer.evaluate();
+const researcher = TurasResearcher ? new TurasResearcher() : null;
+        if (researcher) {
+          state.brief = await researcher.collect({
+            driverCoords,
+            radiusKm: state.radiusKm,
+            platform: state.platform,
+            sessionId: state.sessionId
+          });
+        } else {
+          state.brief = await buildDemoBrief(driverCoords);
+        }
+        const designer = TurasDesigner && state.brief ? new TurasDesigner(state.brief) : null;
+        if (designer) {
+          state.matrix = await designer.evaluate();
+        } else {
+          state.matrix = { hubs: (state.brief.hubs || []).map(h => ({ ...h, pFare: null })), summary: { hubCount: (state.brief.hubs || []).length, topHubId: null, topHubName: null, topPFare: null, avgPFare: null } };
+        }
 
         const payload = buildPayload(state.matrix, state.brief, state.driverCoords);
         const auditResult = audit(state.matrix, state.brief, state);
@@ -2483,7 +2576,7 @@
     async function initialDiscovery() {
       try {
         updateStatusLED('loading');
-        const researcher = new TurasResearcher();
+        const researcher = TurasResearcher ? new TurasResearcher() : null;
         
         // Get driver coords (demo or GPS)
         let driverCoords = state.driverCoords;
@@ -2492,14 +2585,14 @@
           driverCoords = { lat: coords[0], lng: coords[1] };
         }
         
-        const brief = await researcher.discoverHubs({
+        const brief = researcher ? await researcher.discoverHubs({
           driverCoords,
           radiusKm: state.radiusKm,
           sessionId: state.sessionId
-        });
+        }) : await buildDemoBrief(driverCoords);
         
         state.brief = brief;
-        state.matrix = { hubs: brief.hubs.map(h => ({ ...h, pFare: null })) };
+        state.matrix = { hubs: brief.hubs.map(h => ({ ...h, pFare: null })), summary: { hubCount: brief.hubs.length, topHubId: null, topHubName: null, topPFare: null, avgPFare: null } };
         
         renderHubList(state.matrix);
         renderMapMarkers(state.matrix);
