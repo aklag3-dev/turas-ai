@@ -313,7 +313,7 @@ export class TurasResearcher {
 
     for (const hub of hubsInRange) {
       const rand = seededRandom(`${hub.hubId}-${generatedAt.slice(0, 13)}`);
-      const hubWeather = weather || generateSimulatedWeather(rand);
+      const hubWeather = weather || null;
 
       hubData.push({
         hubId: hub.hubId,
@@ -392,7 +392,7 @@ export class TurasResearcher {
     for (const hub of hubsInRange) {
       const rand = seededRandom(`${hub.hubId}-${generatedAt.slice(0, 13)}`);
       let arrivals = [];
-      const hubWeather = weather || generateSimulatedWeather(rand);
+      const hubWeather = weather || null;
       const disruptions = [];
 
       if (hub.modes.includes('flight') && flightResp) {
