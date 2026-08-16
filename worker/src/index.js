@@ -98,14 +98,15 @@ async function handleFlights(request, env, corsHeaders) {
 
   return Response.json({
     data: results.map(f => ({
-      flightNumber: f.flight?.iata || 'Unknown',
+      flightNumber: f.flight?.iata || f.flight?.number || 'Unknown',
       airline: f.airline?.name || 'Unknown',
-      origin: f.departure?.iataCode || 'Unknown',
-      destination: f.arrival?.iataCode || 'Unknown',
+      origin: f.departure?.airport || f.departure?.iata || 'Unknown',
+      destination: f.arrival?.iata || 'Unknown',
+      destinationAirport: f.arrival?.airport || 'Unknown',
       scheduled: f.arrival?.scheduled || null,
       estimated: f.arrival?.estimated || null,
       status: f.flight_status || 'unknown',
-      terminal: f.arrival?.terminal || null
+      terminal: f.arrival?.terminal ? String(f.arrival.terminal).replace(/^T/i, '') : null
     })),
     simulated: false,
     source: 'aviationstack'
@@ -152,8 +153,7 @@ async function handleRail(request, corsHeaders) {
     return Response.json({ error: 'station required' }, { status: 400, headers: corsHeaders });
   }
 
-  // Map hub IDs (from Google Sheet) to Irish Rail station names
-  // Irish Rail API expects specific station names (e.g., "Heuston" not "Dublin Heuston")
+  // Map hub IDs (from Google Sheet) to official Irish Rail station descriptions (StationDesc)
   const stationMap = {
     'IE-TRN-ADC': 'Adamstown',
     'IE-TRN-ARD': 'Ardrahan',
@@ -175,8 +175,8 @@ async function handleRail(request, corsHeaders) {
     'IE-TRN-BRT': 'Broombridge',
     'IE-TRN-CAU': 'Cahir',
     'IE-TRN-CAV': 'Carlow',
-    'IE-TRN-CAW': 'Carrick-on-Shannon',
-    'IE-TRN-CAX': 'Carrick-on-Suir',
+    'IE-TRN-CAW': 'Carrick on Shannon',
+    'IE-TRN-CAX': 'Carrick on Suir',
     'IE-TRN-CAY': 'Carrigaloe',
     'IE-TRN-CAZ': 'Carrigtwohill',
     'IE-TRN-CAA': 'Castlebar',
@@ -186,21 +186,21 @@ async function handleRail(request, corsHeaders) {
     'IE-TRN-CHE': 'Charleville',
     'IE-TRN-CLF': 'Clara',
     'IE-TRN-CLG': 'Claremorris',
-    'IE-TRN-CLH': 'Clondalkin Fonthill',
+    'IE-TRN-CLH': 'Clondalkin',
     'IE-TRN-CLI': 'Clonmel',
     'IE-TRN-CLJ': 'Clonsilla',
     'IE-TRN-CLK': 'Cloughjordan',
     'IE-TRN-COL': 'Cobh',
     'IE-TRN-COM': 'Collooney',
-    'IE-TRN-CON': 'Coolmine',
-    'IE-TRN-COO': 'Cork Kent',
+    'IE-TRN-CON': 'Dublin Connolly',
+    'IE-TRN-COO': 'Cork',
     'IE-TRN-CRP': 'Craughwell',
     'IE-TRN-DOQ': 'Docklands',
     'IE-TRN-DOR': 'Donabate',
     'IE-TRN-DRS': 'Drogheda',
     'IE-TRN-DRT': 'Dromod',
     'IE-TRN-DRU': 'Drumcondra',
-    'IE-TRN-DUV': 'Heuston',
+    'IE-TRN-DUV': 'Dublin Heuston',
     'IE-TRN-DUW': 'Dunboyne',
     'IE-TRN-DUX': 'Dundalk',
     'IE-TRN-EDY': 'Edgeworthstown',
@@ -223,11 +223,11 @@ async function handleRail(request, corsHeaders) {
     'IE-TRN-KIP': 'Kilkenny',
     'IE-TRN-KIQ': 'Killarney',
     'IE-TRN-LAR': 'Laytown',
-    'IE-TRN-LES': 'Leixlip Confey',
-    'IE-TRN-LET': 'Leixlip Louisa Bridge',
+    'IE-TRN-LES': 'Leixlip (Confey)',
+    'IE-TRN-LET': 'Leixlip (Louisa Bridge)',
     'IE-TRN-LIU': 'Limerick',
     'IE-TRN-LIV': 'Limerick Junction',
-    'IE-TRN-LIW': 'Little Island',
+    'IE-TRN-LIW': 'LittleIsland',
     'IE-TRN-LOX': 'Longford',
     'IE-TRN-M3Y': 'M3 Parkway',
     'IE-TRN-MAZ': 'Mallow',
@@ -242,7 +242,7 @@ async function handleRail(request, corsHeaders) {
     'IE-TRN-NEI': 'Nenagh',
     'IE-TRN-NEJ': 'Newbridge',
     'IE-TRN-ORK': 'Oranmore',
-    'IE-TRN-PAL': 'Park West Cherry Orchard',
+    'IE-TRN-PAL': 'Park West and Cherry Orchard',
     'IE-TRN-POM': 'Portarlington',
     'IE-TRN-PON': 'Portlaoise',
     'IE-TRN-RAO': 'Rathdrum',
@@ -253,7 +253,7 @@ async function handleRail(request, corsHeaders) {
     'IE-TRN-ROT': 'Rosslare Strand',
     'IE-TRN-RUU': 'Rush and Lusk',
     'IE-TRN-RUV': 'Rushbrooke',
-    'IE-TRN-SAW': 'Sallins and Naas',
+    'IE-TRN-SAW': 'Sallins',
     'IE-TRN-SAX': 'Salthill and Monkstown',
     'IE-TRN-SIY': 'Sixmilebridge',
     'IE-TRN-SKZ': 'Skerries',
@@ -278,12 +278,16 @@ async function handleRail(request, corsHeaders) {
 
   try {
     const resp = await fetch(
-      `https://api.irishrail.ie/realtime/realtime.asmx/getStationDataByNameXML?StationDesc=${encodeURIComponent(stationName)}`
+      `https://api.irishrail.ie/realtime/realtime.asmx/getStationDataByNameXML?StationDesc=${encodeURIComponent(stationName)}`,
+      { headers: { 'User-Agent': 'TurasAI/1.0' } }
     );
     if (resp.ok) {
       const text = await resp.text();
+      const trains = parseIrishRailXML(text);
       return Response.json({
-        raw: text,
+        data: trains,
+        count: trains.length,
+        station: stationName,
         simulated: false,
         source: 'irishrail'
       }, { headers: corsHeaders });
@@ -297,6 +301,39 @@ async function handleRail(request, corsHeaders) {
     data: [],
     source: 'irishrail'
   }, { headers: corsHeaders });
+}
+
+function parseIrishRailXML(xmlStr) {
+  const trains = [];
+  if (!xmlStr || typeof xmlStr !== 'string') return trains;
+  const items = xmlStr.split(/<objStationData>/i);
+  for (let i = 1; i < items.length; i++) {
+    const block = items[i].split(/<\/objStationData>/i)[0];
+    const getTag = (tag) => {
+      const match = block.match(new RegExp(`<${tag}>([^<]*)</${tag}>`, 'i'));
+      return match ? match[1].trim() : null;
+    };
+    const dueInStr = getTag('Duein');
+    const dueIn = dueInStr != null && dueInStr !== '' ? parseInt(dueInStr, 10) : null;
+    trains.push({
+      trainCode: getTag('Traincode'),
+      stationFullName: getTag('Stationfullname'),
+      stationCode: getTag('Stationcode'),
+      origin: getTag('Origin') || 'Unknown',
+      destination: getTag('Destination') || 'Unknown',
+      status: getTag('Status') || 'active',
+      lastLocation: getTag('Lastlocation'),
+      dueIn: dueIn,
+      etaMinutes: dueIn != null ? dueIn : 15,
+      late: parseInt(getTag('Late') || '0', 10),
+      expArrival: getTag('Exparrival'),
+      schArrival: getTag('Scharrival'),
+      direction: getTag('Direction'),
+      trainType: getTag('Traintype'),
+      locationType: getTag('Locationtype')
+    });
+  }
+  return trains;
 }
 
 async function handleTransit(request, corsHeaders) {

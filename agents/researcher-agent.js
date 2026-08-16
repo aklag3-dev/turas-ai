@@ -131,48 +131,85 @@ async function fetchFromWorker(endpoint, params = {}) {
 
 function processFlightData(flights, hub) {
   if (!flights || !Array.isArray(flights)) return [];
+  const hubId = (hub.hubId || '').toLowerCase();
+  const hubName = (hub.name || '').toLowerCase();
+
   return flights
     .filter(f => {
-      // Match flights to hub by IATA code in hub name or ID
-      const hubName = hub.name.toLowerCase();
-      const hubId = hub.hubId.toLowerCase();
-      
+      const dest = (f.destination || '').toUpperCase();
+      const term = f.terminal ? String(f.terminal).replace(/^T/i, '') : null;
+
+      // Dublin Airport T1 vs T2
       if (hubId.includes('dub1') || hubName.includes('terminal 1')) {
-        return f.destination === 'DUB' && f.terminal === 'T1';
+        return dest === 'DUB' && (term === '1' || term === null);
       }
       if (hubId.includes('dub2') || hubName.includes('terminal 2')) {
-        return f.destination === 'DUB' && f.terminal === 'T2';
+        return dest === 'DUB' && term === '2';
       }
+      if (hubId.includes('dub') || hubName.includes('dublin airport')) {
+        return dest === 'DUB';
+      }
+      // Cork
       if (hubId.includes('ork') || hubName.includes('cork')) {
-        return f.destination === 'ORK';
+        return dest === 'ORK';
       }
+      // Shannon
       if (hubId.includes('snn') || hubName.includes('shannon')) {
-        return f.destination === 'SNN';
+        return dest === 'SNN';
       }
+      // Knock
       if (hubId.includes('noc') || hubName.includes('knock')) {
-        return f.destination === 'NOC';
+        return dest === 'NOC';
       }
+      // Kerry
       if (hubId.includes('kir') || hubName.includes('kerry')) {
-        return f.destination === 'KIR';
+        return dest === 'KIR';
       }
-      
       return false;
     })
-    .map(f => ({
-      mode: 'flight',
-      origin: f.origin || 'Unknown',
-      flightNumber: f.flightNumber || 'Unknown',
-      etaMinutes: f.estimated ? Math.round((new Date(f.estimated) - Date.now()) / 60000) : 15,
-      status: f.status || 'active',
-      simulated: false,
-      source: 'aviationstack'
-    }))
-    .filter(a => a.etaMinutes >= -5 && a.etaMinutes <= 45);
+    .map(f => {
+      const timeStr = f.estimated || f.scheduled;
+      let etaMinutes = 15;
+      if (timeStr) {
+        etaMinutes = Math.round((new Date(timeStr).getTime() - Date.now()) / 60000);
+      }
+      return {
+        mode: 'flight',
+        name: f.flightNumber ? `Flight ${f.flightNumber}` : 'Flight Arrival',
+        origin: f.origin || 'Unknown',
+        flightNumber: f.flightNumber || 'Unknown',
+        airline: f.airline || 'Unknown',
+        terminal: f.terminal ? `T${f.terminal}` : null,
+        etaMinutes: etaMinutes,
+        status: f.status || 'active',
+        simulated: false,
+        source: 'aviationstack'
+      };
+    })
+    .filter(a => a.etaMinutes >= -30 && a.etaMinutes <= 180);
 }
 
 function processRailData(railResp, hub) {
-  if (!railResp) return [];
-  return [];
+  if (!railResp || !Array.isArray(railResp.data)) return [];
+  return railResp.data
+    .map(t => {
+      const dueIn = t.dueIn != null ? t.dueIn : t.etaMinutes;
+      return {
+        mode: 'train',
+        name: t.trainCode ? `Train ${t.trainCode}` : 'Irish Rail',
+        origin: t.origin || 'Unknown',
+        destination: t.destination || hub.name,
+        flightNumber: t.trainCode ? `Train ${t.trainCode}` : 'Irish Rail',
+        etaMinutes: dueIn != null ? dueIn : 15,
+        status: t.status || 'active',
+        trainType: t.trainType || 'Train',
+        direction: t.direction || null,
+        lastLocation: t.lastLocation || null,
+        simulated: false,
+        source: 'irishrail'
+      };
+    })
+    .filter(a => a.etaMinutes >= -5 && a.etaMinutes <= 90);
 }
 
 function processFerryData(ferryResp, hub) {
