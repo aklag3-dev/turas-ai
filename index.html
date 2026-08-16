@@ -1521,11 +1521,24 @@ topHubId: matrix.summary?.topHubId ?? null,
         timestamp: new Date().toISOString()
       };
 
-      const fields = [session, matrix, brief];
+      const safeSession = {
+        sessionId: session?.sessionId,
+        city: session?.city,
+        platform: session?.platform,
+        radiusKm: session?.radiusKm,
+        locationMode: session?.locationMode,
+        driverCoords: session?.driverCoords
+      };
+      const fields = [safeSession, matrix, brief];
       const piiPatterns = [/@/, /\b\d{10}\b/, /\b[A-Z]{2}\d{3,}\b/];
 
       for (const field of fields) {
-        const str = JSON.stringify(field);
+        let str = '';
+        try {
+          str = JSON.stringify(field);
+        } catch {
+          str = '';
+        }
         for (const pattern of piiPatterns) {
           if (pattern.test(str)) {
             zeroPIICheck.passed = false;
@@ -1537,7 +1550,7 @@ topHubId: matrix.summary?.topHubId ?? null,
       const yieldEstimate = calculateYieldEstimate(matrix);
 
       const executionLog = {
-        sessionId: session.sessionId,
+        sessionId: session?.sessionId,
         timestamp: new Date().toISOString(),
         zeroPIICheck: zeroPIICheck.passed,
         yieldEstimate,
