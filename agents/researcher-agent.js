@@ -129,29 +129,6 @@ async function fetchFromWorker(endpoint, params = {}) {
   }
 }
 
-function generateSimulatedWeather(rand) {
-  const precip = Math.round(rand() * 8 * 10) / 10;
-  const temp = Math.round((rand() * 15 + 3) * 10) / 10;
-  const wind = Math.round(rand() * 30);
-  return { precipMmHr: precip, tempC: temp, wind, warnings: [], simulated: true, source: 'simulated' };
-}
-
-function generateSimulatedArrivals(hub, windowMinutes, rand) {
-  const arrivals = [];
-  const count = Math.floor(rand() * 6) + 2;
-  const modes = (hub && Array.isArray(hub.modes) && hub.modes.length > 0) ? hub.modes : ['train'];
-  for (let i = 0; i < count; i++) {
-    const mode = modes[Math.floor(rand() * modes.length)];
-    const etaMinutes = Math.floor(rand() * windowMinutes * 2);
-    let origin = 'Unknown';
-    if (mode === 'flight') origin = rand() > 0.5 ? 'London' : 'Amsterdam';
-    else if (mode === 'train') origin = 'Galway';
-    else origin = 'Holyhead';
-    arrivals.push({ mode, origin, etaMinutes, simulated: true, source: 'simulated' });
-  }
-  return arrivals;
-}
-
 function processFlightData(flights, hub) {
   if (!flights || !Array.isArray(flights)) return [];
   return flights
@@ -195,16 +172,6 @@ function processFlightData(flights, hub) {
 
 function processRailData(railResp, hub) {
   if (!railResp) return [];
-  if (railResp.simulated && railResp.data) {
-    return railResp.data.map(t => ({
-      mode: 'train',
-      origin: t.destination || 'Unknown',
-      etaMinutes: t.eta || 15,
-      status: t.status || 'on_time',
-      simulated: true,
-      source: 'fallback'
-    }));
-  }
   return [];
 }
 
@@ -251,20 +218,6 @@ function processWeatherData(weatherResp) {
   if (!weatherResp || !weatherResp.data) return null;
   const data = weatherResp.data;
 
-  if (weatherResp.simulated) {
-    const now = new Date();
-    const currentHour = now.getHours();
-    const idx = data.time?.findIndex(t => new Date(t).getHours() >= currentHour) || 0;
-    return {
-      precipMmHr: data.precipitation?.[idx] || 0,
-      tempC: data.temperature_2m?.[idx] || 10,
-      wind: data.wind_speed_10m?.[idx] || 0,
-      warnings: [],
-      simulated: true,
-      source: 'fallback'
-    };
-  }
-
   const now = new Date();
   const currentHour = now.getHours();
   const idx = data.time?.findIndex(t => new Date(t).getHours() >= currentHour) || 0;
@@ -273,7 +226,6 @@ function processWeatherData(weatherResp) {
     tempC: data.temperature_2m?.[idx] || 10,
     wind: data.wind_speed_10m?.[idx] || 0,
     warnings: [],
-    simulated: false,
     source: 'open-meteo'
   };
 }

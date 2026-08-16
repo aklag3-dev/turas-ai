@@ -60,8 +60,8 @@ async function handleFlights(request, env, corsHeaders) {
   if (!apiKey) {
     return Response.json({
       error: 'Aviationstack API key not configured',
-      simulated: true,
-      data: generateSimulatedFlights(city)
+      data: [],
+      source: 'aviationstack'
     }, { headers: corsHeaders });
   }
 
@@ -90,9 +90,9 @@ async function handleFlights(request, env, corsHeaders) {
 
   if (results.length === 0) {
     return Response.json({
-      data: generateSimulatedFlights(city),
-      simulated: true,
-      source: 'fallback'
+      data: [],
+      source: 'aviationstack',
+      note: 'No active flights found'
     }, { headers: corsHeaders });
   }
 
@@ -110,29 +110,6 @@ async function handleFlights(request, env, corsHeaders) {
     simulated: false,
     source: 'aviationstack'
   }, { headers: corsHeaders });
-}
-
-function generateSimulatedFlights(city) {
-  const airports = { dublin: 'DUB', cork: 'ORK', shannon: 'SNN' };
-  const origins = ['LHR', 'AMS', 'CDG', 'FRA', 'JFK', 'BOS'];
-  const now = Date.now();
-  const flights = [];
-
-  for (let i = 0; i < 8; i++) {
-    const etaMs = (Math.random() * 60 - 15) * 60000;
-    flights.push({
-      flightNumber: `FR${100 + i}`,
-      airline: 'Ryanair',
-      origin: origins[Math.floor(Math.random() * origins.length)],
-      destination: airports[city] || 'DUB',
-      scheduled: new Date(now + etaMs).toISOString(),
-      estimated: new Date(now + etaMs + Math.random() * 10 * 60000).toISOString(),
-      status: Math.random() > 0.8 ? 'delayed' : 'active',
-      terminal: Math.random() > 0.5 ? 'T1' : 'T2',
-      simulated: true
-    });
-  }
-  return flights;
 }
 
 async function handleWeather(request, env, corsHeaders) {
@@ -161,28 +138,10 @@ async function handleWeather(request, env, corsHeaders) {
   }
 
   return Response.json({
-    data: generateSimulatedWeather(),
-    simulated: true,
-    source: 'fallback'
+    error: 'Weather data unavailable',
+    data: [],
+    source: 'open-meteo'
   }, { headers: corsHeaders });
-}
-
-function generateSimulatedWeather() {
-  const now = new Date();
-  const times = [];
-  const temps = [];
-  const precips = [];
-  const winds = [];
-
-  for (let i = 0; i < 24; i++) {
-    const hour = new Date(now.getTime() + i * 3600000);
-    times.push(hour.toISOString());
-    temps.push(Math.round((8 + Math.random() * 8) * 10) / 10);
-    precips.push(Math.round(Math.random() * 6 * 10) / 10);
-    winds.push(Math.round(Math.random() * 25));
-  }
-
-  return { time: times, temperature_2m: temps, precipitation: precips, wind_speed_10m: winds };
 }
 
 async function handleRail(request, corsHeaders) {
@@ -334,36 +293,17 @@ async function handleRail(request, corsHeaders) {
   }
 
   return Response.json({
-    data: generateSimulatedRail(stationName),
-    simulated: true,
-    source: 'fallback'
+    error: 'Rail data unavailable',
+    data: [],
+    source: 'irishrail'
   }, { headers: corsHeaders });
-}
-
-function generateSimulatedRail(station) {
-  const destinations = ['Galway', 'Cork', 'Limerick', 'Waterford', 'Sligo'];
-  const now = Date.now();
-  const trains = [];
-
-  for (let i = 0; i < 4; i++) {
-    const etaMs = (Math.random() * 45 + 5) * 60000;
-    trains.push({
-      destination: destinations[Math.floor(Math.random() * destinations.length)],
-      scheduled: new Date(now + etaMs).toISOString(),
-      eta: Math.round(etaMs / 60000),
-      status: Math.random() > 0.85 ? 'delayed' : 'on_time',
-      simulated: true
-    });
-  }
-  return trains;
 }
 
 async function handleTransit(request, corsHeaders) {
   return Response.json({
     data: [],
-    simulated: true,
-    source: 'fallback',
-    note: 'TFI GTFS-Realtime not available from browser'
+    source: 'tfi',
+    note: 'TFI GTFS-Realtime not available'
   }, { headers: corsHeaders });
 }
 
@@ -444,12 +384,10 @@ async function handleFerries(request, env, corsHeaders) {
 
   const apiKey = env.VESSELAPI_KEY;
   if (!apiKey) {
-    console.log('VesselAPI key not configured');
     return Response.json({
-      data: generateSimulatedFerries(),
-      simulated: true,
-      source: 'fallback',
-      note: 'VesselAPI key not configured. Using simulated data.'
+      error: 'VesselAPI key not configured',
+      data: [],
+      source: 'vesselapi'
     }, { headers: corsHeaders });
   }
 
@@ -463,10 +401,11 @@ async function handleFerries(request, env, corsHeaders) {
       
       if (!vesselEtas || vesselEtas.length === 0) {
         return Response.json({
-          data: generateSimulatedFerries(),
-          simulated: true,
-          source: 'fallback',
-          note: `No live inbound data for ${port}. Using simulated data.`
+          data: [],
+          source: 'vesselapi',
+          port: port,
+          count: 0,
+          note: `No live inbound data for ${port}`
         }, { headers: corsHeaders });
       }
 
@@ -514,31 +453,10 @@ async function handleFerries(request, env, corsHeaders) {
   }
 
   return Response.json({
-    data: generateSimulatedFerries(),
-    simulated: true,
-    source: 'fallback',
-    note: 'VesselAPI call failed. Using simulated data.'
+    error: 'Ferry data unavailable',
+    data: [],
+    source: 'vesselapi'
   }, { headers: corsHeaders });
-}
-
-function generateSimulatedFerries() {
-  const ports = ['Dublin Port', 'Ringaskiddy'];
-  const now = Date.now();
-  const ferries = [];
-
-  for (const port of ports) {
-    for (let i = 0; i < 2; i++) {
-      const etaMs = (Math.random() * 120 + 30) * 60000;
-      ferries.push({
-        port,
-        operator: Math.random() > 0.5 ? 'Irish Ferries' : 'Stena Line',
-        origin: port.includes('Dublin') ? 'Holyhead' : 'Roscoff',
-        eta: new Date(now + etaMs).toISOString(),
-        simulated: true
-      });
-    }
-  }
-  return ferries;
 }
 
 async function handleRoute(request, env, corsHeaders) {
@@ -555,9 +473,9 @@ async function handleRoute(request, env, corsHeaders) {
   const apiKey = env.ORS_API_KEY;
   if (!apiKey) {
     return Response.json({
-      data: generateSimulatedRoute(startLat, startLon, endLat, endLon),
-      simulated: true,
-      source: 'fallback'
+      error: 'ORS API key not configured',
+      data: null,
+      source: 'openrouteservice'
     }, { headers: corsHeaders });
   }
 
@@ -594,29 +512,10 @@ async function handleRoute(request, env, corsHeaders) {
   }
 
   return Response.json({
-    data: generateSimulatedRoute(startLat, startLon, endLat, endLon),
-    simulated: true,
-    source: 'fallback'
+    error: 'Route data unavailable',
+    data: null,
+    source: 'openrouteservice'
   }, { headers: corsHeaders });
-}
-
-function generateSimulatedRoute(startLat, startLon, endLat, endLon) {
-  const dLat = endLat - startLat;
-  const dLon = endLon - startLon;
-  const dist = Math.sqrt(dLat * dLat + dLon * dLon) * 111;
-  const duration = dist * 120;
-
-  return {
-    geometry: {
-      type: 'LineString',
-      coordinates: [
-        [parseFloat(startLon), parseFloat(startLat)],
-        [parseFloat(endLon), parseFloat(endLat)]
-      ]
-    },
-    duration: Math.round(duration),
-    distance: Math.round(dist * 1000)
-  };
 }
 
 async function handleHubs(request, corsHeaders) {
