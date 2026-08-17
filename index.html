@@ -220,6 +220,51 @@
       box-shadow: 0 4px 12px var(--shadow);
     }
 
+    .info-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 0.875rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 4px 12px var(--shadow);
+    }
+
+    .info-card-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .info-card-body {
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    .app-footer {
+      text-align: center;
+      padding: 1.25rem 1rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+      background: var(--bg-secondary);
+    }
+
+    .app-footer a {
+      color: var(--green);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .app-footer a:hover {
+      text-decoration: underline;
+    }
+
     .config-title {
       font-size: 0.8rem;
       font-weight: 700;
@@ -1275,6 +1320,14 @@
 
   <div class="container" id="app">
     <div class="left-rail">
+      <!-- Turas AI Info Card -->
+      <div class="info-card">
+        <div class="info-card-title">Turas AI</div>
+        <div class="info-card-body">
+          Turas AI predicts passenger demand ($P_{fare}$) across Irish transit hubs by evaluating live flight, rail, and ferry arrivals alongside weather and platform supply density. Select your city, primary platform, and search radius, then click <strong>Begin Search</strong> to find optimal driver dispatch locations.
+        </div>
+      </div>
+
       <!-- Search Configuration Box -->
       <div class="config-box" id="config-box">
         <div class="config-title">Search Configuration</div>
@@ -1388,6 +1441,10 @@
       </div>
     </div>
   </div>
+
+  <footer class="app-footer">
+    Under Active development with AI by <a href="https://github.com/aklag3-dev" target="_blank" rel="noopener">aklag3-dev/</a>
+  </footer>
 
   <div class="chat-bubble" id="chat-bubble" onclick="toggleChat()">💬</div>
   

@@ -21,18 +21,18 @@ Turas AI (Irish: *turas* = journey) calculates the probability a driver will sec
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    GitHub Pages (Static)                  │
-│  index.html → agents/researcher-agent.js                 │
-│             → agents/designer-agent.js                   │
-│                          │                                │
-│                          ▼                                │
+│                    GitHub Pages (Static)                │
+│  index.html → agents/researcher-agent.js                │
+│             → agents/designer-agent.js                  │
+│                          │                              │
+│                          ▼                              │
 │  ┌─────────────────────────────────────────────────┐    │
-│  │      Cloudflare Worker (turas-ai-proxy)          │    │
-│  │  /api/flights  → Aviationstack API               │    │
-│  │  /api/weather  → Open-Meteo API                  │    │
-│  │  /api/rail     → Irish Rail Realtime             │    │
-│  │  /api/ferries  → VesselFinder (simulated)        │    │
-│  │  /api/route    → OpenRouteService                │    │
+│  │      Cloudflare Worker (turas-ai-proxy)         │    │
+│  │  /api/flights  → Aviationstack API              │    │
+│  │  /api/weather  → Open-Meteo API                 │    │
+│  │  /api/rail     → Irish Rail Realtime            │    │
+│  │  /api/ferries  → VesselFinder (simulated)       │    │
+│  │  /api/route    → OpenRouteService               │    │
 │  └─────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -131,9 +131,9 @@ npm run secret:ors             # Set OpenRouteService API key (optional)
 
 ## Future Roadmap & Features
 
-1. **Recommendation Sharing (Social Dispatch)**
-   - Share live hub recommendations with other drivers or dispatchers via unique URL links, email, SMS/text message, or WhatsApp.
-   - One-click QR code export for instant mobile navigation.
+1. **Mobile App**
+   - Deploy the service as a mobile app that integrates well with Ride Hailing platform usage.
+   - Enable notifications for proximal demand spikes even if the app is closed.
 
 2. **User Accounts & Driver Profiles**
    - Passwordless driver accounts (FIDO2 passkey / OAuth2).
@@ -145,7 +145,15 @@ npm run secret:ors             # Set OpenRouteService API key (optional)
 
 4. **Time-Series Surge Heatmaps**
    - Predictive demand heatmaps forecasting passenger arrival surges 2–4 hours in advance.
+   - Predictive demand heatmaps forecasting general demand surges in advance with predicted timeline and passenger number.
 
+5. **Event Demand Prediction**
+   - Event venues as hubs with event closing time demand spike prediction.
+   
+6. **Recommendation Sharing (Social Dispatch)**
+   - Share live hub recommendations with other drivers or dispatchers via unique URL links, email, SMS/text message, or WhatsApp.
+   - One-click QR code export for instant mobile navigation.
+   
 ---
 
 ## Academic Context
